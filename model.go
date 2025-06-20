@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
 	"strings"
+
+	"github.com/bkielbasa/goku/normalmode"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 type editorMode string
@@ -12,12 +14,16 @@ const ModeNormal editorMode = "normal"
 const ModeInsert editorMode = "insert"
 const ModeCommand editorMode = "command"
 
+type normalMode interface {
+	Handle(msg tea.KeyMsg, m normalmode.EditorModel) (normalmode.NormalMode, tea.Model, tea.Cmd)
+}
+
 type model struct {
-	mode             editorMode
-	commandBuffer    string // Buffer for command mode input
-	commands         []command
-	normalModeBuffer string
-	viewport         tea.WindowSizeMsg
+	mode          editorMode
+	normalmode    normalMode
+	commandBuffer string // Buffer for command mode input
+	commands      []command
+	viewport      tea.WindowSizeMsg
 
 	buffers    []buffer
 	currBuffer int
@@ -28,8 +34,9 @@ type model struct {
 func initialModel() model {
 	s := newEditorStyle()
 	return model{
-		mode:     ModeNormal,
-		viewport: tea.WindowSizeMsg{},
+		mode:       ModeNormal,
+		viewport:   tea.WindowSizeMsg{},
+		normalmode: normalmode.New(),
 		commands: []command{
 			&commandQuit{},
 			&commandOpen{},
@@ -46,8 +53,23 @@ func (m model) Init() tea.Cmd {
 	return nil
 }
 
-func (m model) currentBuffer() buffer {
+func (m model) CurrentBuffer() normalmode.Buffer {
 	return m.buffers[m.currBuffer]
+}
+
+func (m model) EnterCommandMode() normalmode.EditorModel {
+	m.mode = ModeCommand
+	return m
+}
+
+func (m model) EnterInsertMode() normalmode.EditorModel {
+	m.mode = ModeInsert
+	return m
+}
+
+func (m model) ReplaceCurrentBuffer(b normalmode.Buffer) normalmode.EditorModel {
+	m.buffers[m.currBuffer] = b.(buffer)
+	return m
 }
 
 func (m model) addBuffer(b buffer) model {
@@ -87,7 +109,7 @@ func (m model) View() string {
 
 		buff := fmt.Sprintf("%s ", strings.ToUpper(string(m.mode))) + f
 		posInfo := filePossitionInfo(buf.cursorY+1, buf.cursorX+1)
-		width := m.currentBuffer().viewport.Width
+		width := m.CurrentBuffer().Viewport().Width
 
 		pad := width - len(buff) - len(posInfo)
 		if pad < 1 {
