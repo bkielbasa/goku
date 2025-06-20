@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
 	"strings"
+
+	"github.com/bkielbasa/goku/normalmode"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 type bufferState string
@@ -56,6 +58,11 @@ func newBuffer(style editorStyle, ops ...newBufferOps) buffer {
 	return b
 }
 
+func (b buffer) SetStateModified() normalmode.Buffer {
+	b.state = bufferStateModified
+	return b
+}
+
 func (m buffer) View() string {
 	var b strings.Builder
 
@@ -88,6 +95,70 @@ func (m buffer) View() string {
 	}
 
 	return b.String()
+}
+
+func (b buffer) Viewport() tea.WindowSizeMsg {
+	return b.viewport
+}
+
+func (b buffer) CursorX() int {
+	return b.cursorX
+}
+
+func (b buffer) IncreaseCursorX(n int) normalmode.Buffer {
+	b.cursorX += n
+	if b.cursorX < 0 {
+		b.cursorX = 0
+	}
+	return b
+}
+
+func (b buffer) IncreaseCursorY(n int) normalmode.Buffer {
+	b.cursorY += n
+	if b.cursorY < 0 {
+		b.cursorY = 0
+	}
+
+	return b
+}
+
+func (b buffer) IncreaseCursorYOffset(n int) normalmode.Buffer {
+	b.cursorYOffset += n
+	if b.cursorYOffset < 0 {
+		b.cursorYOffset = 0
+	}
+
+	return b
+}
+
+func (b buffer) Line(n int) string {
+	return b.lines[n]
+}
+
+func (b buffer) NoOfLines() int {
+	return len(b.lines)
+}
+
+func (b buffer) CursorXOffset() int {
+	return b.cursorXOffset
+}
+
+func (b buffer) CursorY() int {
+	return b.cursorY
+}
+
+func (b buffer) CursorYOffset() int {
+	return b.cursorYOffset
+}
+
+func (b buffer) AppendLine(s string) normalmode.Buffer {
+	b.lines = append(b.lines, s)
+	return b
+}
+
+func (b buffer) ReplaceLine(n int, s string) normalmode.Buffer {
+	b.lines[n] = s
+	return b
 }
 
 func lineNumber(n int, total int) string {

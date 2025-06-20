@@ -5,7 +5,7 @@ import (
 )
 
 func (m model) updateInsert(msg tea.Msg) (tea.Model, tea.Cmd) {
-	buff := m.currentBuffer()
+	buff := m.CurrentBuffer()
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -15,29 +15,28 @@ func (m model) updateInsert(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mode = ModeNormal
 			m.commandBuffer = ""
 		case "enter":
-			buff.lines = append(buff.lines, "")
-			buff.cursorY++
-			buff.cursorX = 0
+			buff = buff.AppendLine("")
+			buff = buff.IncreaseCursorY(1)
+			buff = buff.IncreaseCursorX(-buff.CursorX())
 		case "left":
-			if buff.cursorX > 0 {
-				buff.cursorX--
-			}
+			buff = buff.IncreaseCursorX(-1)
 		case "right":
-			if buff.cursorX < len(buff.lines[buff.cursorY]) {
-				buff.cursorX++
+			if buff.CursorX() < len(buff.Line(buff.CursorY())) {
+				buff.IncreaseCursorX(1)
 			}
 		case "up":
-			if buff.cursorY > 0 {
-				buff.cursorY--
-			}
+			buff = buff.IncreaseCursorY(-1)
 		case "down":
-			if buff.cursorY < len(buff.lines)-1 {
-				buff.cursorY++
+			if buff.CursorY() < buff.NoOfLines()-1 {
+				buff = buff.IncreaseCursorY(1)
 			}
 		case "backspace":
-			if buff.cursorX > 0 {
-				buff.lines[buff.cursorY] = buff.lines[buff.cursorY][:buff.cursorX-1] + buff.lines[buff.cursorY][buff.cursorX:]
-				buff.cursorX--
+			if buff.CursorX() > 0 {
+				line := buff.Line(buff.CursorY())
+
+				line = line[:buff.CursorX()-1] + line[buff.CursorX():]
+				buff.IncreaseCursorX(-1)
+				buff = buff.ReplaceLine(buff.CursorY(), line)
 			}
 		default:
 			s := msg.String()
@@ -48,17 +47,22 @@ func (m model) updateInsert(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			buff.state = bufferStateModified
-			if buff.cursorX <= len(buff.lines[buff.cursorY]) {
-				buff.lines[buff.cursorY] = buff.lines[buff.cursorY][:buff.cursorX] + s + buff.lines[buff.cursorY][buff.cursorX:]
-				buff.cursorX++
+			buff = buff.SetStateModified()
+			if buff.CursorX() <= len(buff.Line(buff.CursorY())) {
+				line := buff.Line(buff.CursorY())
+				line = line[:buff.CursorX()] + s + line[buff.CursorX():]
+				buff = buff.ReplaceLine(buff.CursorY(), line)
+				buff = buff.IncreaseCursorX(1)
 			} else {
-				buff.lines[buff.cursorY] += s
-				buff.cursorX = len(buff.lines[buff.cursorY])
+				line := buff.Line(buff.CursorY())
+				line += s
+
+				buff = buff.ReplaceLine(buff.CursorY(), line)
+				buff = buff.IncreaseCursorX(len(s))
 			}
 		}
 	}
 
-	m.buffers[m.currBuffer] = buff
+	m.buffers[m.currBuffer] = buff.(buffer)
 	return m, nil
 }
