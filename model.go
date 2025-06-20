@@ -13,10 +13,11 @@ const ModeInsert editorMode = "insert"
 const ModeCommand editorMode = "command"
 
 type model struct {
-	mode          editorMode
-	commandBuffer string // Buffer for command mode input
-	commands      []command
-	viewport      tea.WindowSizeMsg
+	mode             editorMode
+	commandBuffer    string // Buffer for command mode input
+	commands         []command
+	normalModeBuffer string
+	viewport         tea.WindowSizeMsg
 
 	buffers    []buffer
 	currBuffer int
@@ -83,7 +84,17 @@ func (m model) View() string {
 	} else {
 		buf := m.buffers[m.currBuffer]
 		f := fileNameLabel(buf.filename, buf.state)
-		b.WriteString(m.style.statusBar.Render(fmt.Sprintf("%s ", strings.ToUpper(string(m.mode)))) + f)
+
+		buff := fmt.Sprintf("%s ", strings.ToUpper(string(m.mode))) + f
+		posInfo := filePossitionInfo(buf.cursorY+1, buf.cursorX+1)
+		width := m.currentBuffer().viewport.Width
+
+		pad := width - len(buff) - len(posInfo)
+		if pad < 1 {
+			pad = 1
+		}
+
+		b.WriteString(m.style.statusBar.Render(buff + strings.Repeat(" ", pad) + posInfo))
 	}
 
 	return b.String()
@@ -105,4 +116,8 @@ func fileNameLabel(filename string, s bufferState) string {
 	}
 
 	return "not implemented yet"
+}
+
+func filePossitionInfo(line, cur int) string {
+	return fmt.Sprintf("%d:%d", line, cur)
 }
