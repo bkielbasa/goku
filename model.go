@@ -40,6 +40,7 @@ func initialModel() model {
 		commands: []command{
 			&commandQuit{},
 			&commandOpen{},
+			&commandWrite{},
 		},
 		style: s,
 
