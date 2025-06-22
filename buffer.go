@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/bkielbasa/goku/normalmode"
@@ -194,4 +195,36 @@ func visualCursorX(s string, logicalX int) int {
 		}
 	}
 	return col
+}
+
+func loadFile(filename string, style editorStyle) (buffer, error) {
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		return buffer{}, err
+	}
+
+	// Split content into lines, but preserve empty files
+	lines := strings.Split(string(content), "\n")
+	
+	// Remove trailing empty line if file ends with newline
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	
+	// Ensure we always have at least one line
+	if len(lines) == 0 {
+		lines = []string{""}
+	}
+
+	b := buffer{
+		state:         bufferStateSaved,
+		lines:         lines,
+		filename:      filename,
+		cursorY:       0,
+		cursorYOffset: 0,
+		viewport:      tea.WindowSizeMsg{},
+		style:         style,
+	}
+
+	return b, nil
 }

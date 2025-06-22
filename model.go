@@ -31,9 +31,26 @@ type model struct {
 	style editorStyle
 }
 
-func initialModel() model {
+type modelOption func(*model)
+
+func WithFile(filename string) modelOption {
+	return func(m *model) {
+		if filename != "" {
+			// Try to load the file
+			if loadedBuffer, err := loadFile(filename, m.style); err == nil {
+				m.buffers[0] = loadedBuffer
+			} else {
+				// If file doesn't exist or can't be read, create a new buffer with the filename
+				m.buffers[0] = newBuffer(m.style, bufferWithContent(filename, ""))
+			}
+		}
+	}
+}
+
+func initialModel(opts ...modelOption) model {
 	s := newEditorStyle()
-	return model{
+	
+	m := model{
 		mode:       ModeNormal,
 		viewport:   tea.WindowSizeMsg{},
 		normalmode: normalmode.New(),
@@ -47,6 +64,13 @@ func initialModel() model {
 			newBuffer(s),
 		},
 	}
+	
+	// Apply all options
+	for _, opt := range opts {
+		opt(&m)
+	}
+	
+	return m
 }
 
 func (m model) Init() tea.Cmd {
