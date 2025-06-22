@@ -9,8 +9,10 @@ type Buffer interface {
 	Viewport() tea.WindowSizeMsg
 
 	CursorX() int
+	SetCursorX(int) Buffer
 	IncreaseCursorX(int) Buffer
 	CursorY() int
+	SetCursorY(int) Buffer
 	IncreaseCursorY(int) Buffer
 
 	CursorYOffset() int
@@ -18,10 +20,14 @@ type Buffer interface {
 
 	NoOfLines() int
 	Line(n int) string
+	Lines() []string
 	ReplaceLine(n int, s string) Buffer
 	AppendLine(s string) Buffer
 
 	SetStateModified() Buffer
+
+	FileName() string
+	SetFileName(f string) Buffer
 }
 
 type EditorModel interface {
@@ -57,6 +63,8 @@ func New() normalmode {
 		"left":  nm.commandLeft,
 		"l":     nm.commandRight,
 		"right": nm.commandRight,
+		"w":     nm.commandNextWord,
+		"b":     nm.commandPrevWord,
 
 		"esc": nm.commandClearBuffer,
 		":":   nm.commandEnterCommandMode,
@@ -77,7 +85,7 @@ func (nm normalmode) Handle(msg tea.KeyMsg, m EditorModel) (NormalMode, tea.Mode
 
 	// let's check if there's any command that starts with the buffer
 	found := false
-	for k, _ := range nm.commands {
+	for k := range nm.commands {
 		if strings.HasPrefix(k, buff) {
 			found = true
 			break
