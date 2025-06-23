@@ -112,11 +112,21 @@ func (nm *normalmode) commandNextWord(m EditorModel, cmd tea.Cmd) (tea.Model, te
 	cursorX := b.CursorX()
 	line := []rune(b.Line(cursorY))
 
+	// If cursor is at or beyond the end of the line, move to next line
 	if len(line) <= cursorX {
 		cursorX = -1
+		cursorY++
+		if b.NoOfLines() == cursorY {
+			cursorY = 0
+		}
+		line = []rune(b.Line(cursorY))
 	}
 
-	inWord := !slices.Contains(nextWordSkipCharacters(), line[cursorX])
+	// Determine if we're currently in a word
+	inWord := false
+	if cursorX >= 0 && cursorX < len(line) {
+		inWord = !slices.Contains(nextWordSkipCharacters(), line[cursorX])
+	}
 
 	for {
 		cursorX++
@@ -131,7 +141,12 @@ func (nm *normalmode) commandNextWord(m EditorModel, cmd tea.Cmd) (tea.Model, te
 			}
 
 			line = []rune(b.Line(cursorY))
-
+			
+			// Skip empty lines
+			if len(line) == 0 {
+				continue
+			}
+			
 			continue
 		}
 
