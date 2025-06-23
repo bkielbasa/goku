@@ -49,7 +49,7 @@ func WithFile(filename string) modelOption {
 
 func initialModel(opts ...modelOption) model {
 	s := newEditorStyle()
-	
+
 	m := model{
 		mode:       ModeNormal,
 		viewport:   tea.WindowSizeMsg{},
@@ -65,12 +65,12 @@ func initialModel(opts ...modelOption) model {
 			newBuffer(s),
 		},
 	}
-	
+
 	// Apply all options
 	for _, opt := range opts {
 		opt(&m)
 	}
-	
+
 	return m
 }
 
