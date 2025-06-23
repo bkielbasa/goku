@@ -2,6 +2,7 @@ package normalmode
 
 import (
 	"slices"
+	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -65,6 +66,31 @@ func (nm *normalmode) commandRight(m EditorModel, cmd tea.Cmd) (tea.Model, tea.C
 		b = b.IncreaseCursorX(1)
 	}
 
+	m = m.ReplaceCurrentBuffer(b)
+
+	return m, cmd
+}
+
+func (nm *normalmode) commandGoToLast(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.CurrentBuffer()
+	b = b.SetCursorX(len(b.Line(b.CursorY())))
+
+	m = m.ReplaceCurrentBuffer(b)
+
+	return m, cmd
+}
+
+func (nm *normalmode) commandGoToFirstNonWhiteCharacter(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.CurrentBuffer()
+	l := b.Line(b.CursorY())
+	index := 0
+	for i, r := range l {
+		if !unicode.IsSpace(r) {
+			index = i
+			break
+		}
+	}
+	b = b.SetCursorX(index)
 	m = m.ReplaceCurrentBuffer(b)
 
 	return m, cmd

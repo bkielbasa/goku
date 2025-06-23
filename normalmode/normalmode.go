@@ -66,6 +66,9 @@ func New() normalmode {
 		"w":     nm.commandNextWord,
 		"b":     nm.commandPrevWord,
 
+		"gl": nm.commandGoToLast,
+		"gs": nm.commandGoToFirstNonWhiteCharacter,
+
 		"esc": nm.commandClearBuffer,
 		":":   nm.commandEnterCommandMode,
 		"i":   nm.commandEnterInsertMode,
