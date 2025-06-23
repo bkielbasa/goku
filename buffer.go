@@ -129,10 +129,27 @@ func (m buffer) View() string {
 		visual := expandTabs(line)
 		b.WriteString(lineNumber(y+1, len(m.lines)))
 
+		// Apply horizontal scrolling
+		lineNumberWidth := len(fmt.Sprintf("%d", len(m.lines))) + 1
+		availableWidth := m.viewport.Width - lineNumberWidth
+		
+		// Trim the line based on horizontal offset
+		startX := m.cursorXOffset
+		endX := startX + availableWidth
+		
+		if startX < len(visual) {
+			if endX > len(visual) {
+				endX = len(visual)
+			}
+			visual = visual[startX:endX]
+		} else {
+			visual = ""
+		}
+
 		styledChunks := m.HighlightString(visual)
 
 		if y == m.cursorY {
-			visX := visualCursorX(line, m.cursorX)
+			visX := visualCursorX(m.lines[y], m.cursorX) - m.cursorXOffset
 			renderedCursor := false
 			currentCol := 0
 
@@ -166,7 +183,7 @@ func (m buffer) View() string {
 				currentCol += chunkWidth
 			}
 
-			if !renderedCursor {
+			if !renderedCursor && visX >= 0 && visX < availableWidth {
 				b.WriteString(m.style.cursor.Render(" "))
 			}
 		} else {
@@ -190,7 +207,7 @@ func (b buffer) CursorX() int {
 
 func (b buffer) SetCursorX(n int) normalmode.Buffer {
 	b.cursorX = n
-	return b
+	return b.adjustViewportForCursor()
 }
 
 func (b buffer) SetCursorY(n int) normalmode.Buffer {
@@ -203,7 +220,7 @@ func (b buffer) IncreaseCursorX(n int) normalmode.Buffer {
 	if b.cursorX < 0 {
 		b.cursorX = 0
 	}
-	return b
+	return b.adjustViewportForCursor()
 }
 
 func (b buffer) IncreaseCursorY(n int) normalmode.Buffer {
@@ -224,8 +241,18 @@ func (b buffer) IncreaseCursorYOffset(n int) normalmode.Buffer {
 	return b
 }
 
+func (b buffer) IncreaseCursorXOffset(n int) normalmode.Buffer {
+	b.cursorXOffset += n
+	if b.cursorXOffset < 0 {
+		b.cursorXOffset = 0
+	}
+
+	return b
+}
+
 // adjustViewportForCursor ensures the cursor stays within the viewport
 func (b buffer) adjustViewportForCursor() normalmode.Buffer {
+	// Vertical viewport adjustment
 	// If cursor is above the viewport, scroll up
 	if b.cursorY < b.cursorYOffset {
 		b.cursorYOffset = b.cursorY
@@ -240,6 +267,30 @@ func (b buffer) adjustViewportForCursor() normalmode.Buffer {
 	// Ensure viewport doesn't go below 0
 	if b.cursorYOffset < 0 {
 		b.cursorYOffset = 0
+	}
+
+	// Horizontal viewport adjustment
+	// Calculate the visual cursor position (accounting for tabs)
+	line := b.Line(b.cursorY)
+	visualX := visualCursorX(line, b.cursorX)
+	
+	// Account for line numbers and padding
+	lineNumberWidth := len(fmt.Sprintf("%d", len(b.lines))) + 1
+	availableWidth := b.viewport.Width - lineNumberWidth
+	
+	// If cursor is to the left of the viewport, scroll left
+	if visualX < b.cursorXOffset {
+		b.cursorXOffset = visualX
+	}
+	
+	// If cursor is to the right of the viewport, scroll right
+	if visualX >= b.cursorXOffset+availableWidth {
+		b.cursorXOffset = visualX - availableWidth + 1
+	}
+	
+	// Ensure viewport doesn't go below 0
+	if b.cursorXOffset < 0 {
+		b.cursorXOffset = 0
 	}
 	
 	return b

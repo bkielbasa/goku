@@ -15,6 +15,8 @@ type Buffer interface {
 	SetCursorY(int) Buffer
 	IncreaseCursorY(int) Buffer
 
+	CursorXOffset() int
+	IncreaseCursorXOffset(int) Buffer
 	CursorYOffset() int
 	IncreaseCursorYOffset(int) Buffer
 

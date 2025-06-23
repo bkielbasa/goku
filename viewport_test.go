@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -64,6 +65,23 @@ func TestViewportAdjustment(t *testing.T) {
 			},
 			expectedOffset: 0, // Should scroll to top
 		},
+		{
+			name:           "horizontal viewport adjustment - long line",
+			content:        "This is a very long line that extends far beyond the viewport width and should cause horizontal scrolling when the cursor moves to the end",
+			initialCursorY: 0,
+			viewportHeight: 10,
+			action: func(m model) model {
+				// Move cursor to end of line
+				keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")}
+				newModel, _ := m.Update(keyMsg)
+				m = newModel.(model)
+				keyMsg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")}
+				newModel, _ = m.Update(keyMsg)
+				m = newModel.(model)
+				return m
+			},
+			expectedOffset: 0, // Vertical offset should remain 0
+		},
 	}
 
 	for _, tt := range tests {
@@ -95,6 +113,23 @@ func TestViewportAdjustment(t *testing.T) {
 
 			if cursorY < viewportStart || cursorY >= viewportEnd {
 				t.Errorf("cursor Y (%d) is outside viewport [%d, %d)", cursorY, viewportStart, viewportEnd)
+			}
+
+			// For horizontal viewport test, also check horizontal positioning
+			if strings.Contains(tt.name, "horizontal") {
+				cursorX := m.buffers[0].cursorX
+				cursorXOffset := m.buffers[0].cursorXOffset
+				line := m.buffers[0].Line(cursorY)
+				visualX := visualCursorX(line, cursorX)
+				
+				// The cursor should be visible (within the viewport width)
+				lineNumberWidth := len(fmt.Sprintf("%d", len(m.buffers[0].lines))) + 1
+				availableWidth := m.viewport.Width - lineNumberWidth
+				
+				if visualX < cursorXOffset || visualX >= cursorXOffset+availableWidth {
+					t.Errorf("cursor X (visual: %d, offset: %d) is outside horizontal viewport [%d, %d)", 
+						visualX, cursorXOffset, cursorXOffset, cursorXOffset+availableWidth)
+				}
 			}
 		})
 	}
