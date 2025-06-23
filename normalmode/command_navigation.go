@@ -71,6 +71,24 @@ func (nm *normalmode) commandRight(m EditorModel, cmd tea.Cmd) (tea.Model, tea.C
 	return m, cmd
 }
 
+func (nm *normalmode) commandGoToBeginingOfTheFile(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.CurrentBuffer()
+	b = b.SetCursorY(0)
+
+	m = m.ReplaceCurrentBuffer(b)
+
+	return m, cmd
+}
+
+func (nm *normalmode) commandGoToEndOfTheFile(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.CurrentBuffer()
+	b = b.SetCursorY(len(b.Lines()) - 1)
+
+	m = m.ReplaceCurrentBuffer(b)
+
+	return m, cmd
+}
+
 func (nm *normalmode) commandGoToLast(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	b := m.CurrentBuffer()
 	b = b.SetCursorX(len(b.Line(b.CursorY())))

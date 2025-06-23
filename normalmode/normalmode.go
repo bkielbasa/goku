@@ -66,6 +66,8 @@ func New() normalmode {
 		"w":     nm.commandNextWord,
 		"b":     nm.commandPrevWord,
 
+		"gg": nm.commandGoToBeginingOfTheFile,
+		"ge": nm.commandGoToEndOfTheFile,
 		"gl": nm.commandGoToLast,
 		"gs": nm.commandGoToFirstNonWhiteCharacter,
 
