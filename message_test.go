@@ -108,16 +108,15 @@ func TestQuitWithUnsavedBuffers(t *testing.T) {
 	}
 
 	// Check that error message is set
-	resultModel := newModel.(model)
-	if resultModel.currentMessage == nil {
+	if newModel.currentMessage == nil {
 		t.Error("Expected error message when quitting with unsaved buffers")
 	}
 
-	if resultModel.currentMessage.msgType != MessageError {
+	if newModel.currentMessage.msgType != MessageError {
 		t.Error("Expected error message type")
 	}
 
-	if !strings.Contains(resultModel.currentMessage.text, "No write since last change") {
+	if !strings.Contains(newModel.currentMessage.text, "No write since last change") {
 		t.Error("Expected error message about unsaved changes")
 	}
 }
@@ -140,8 +139,7 @@ func TestQuitWithSavedBuffers(t *testing.T) {
 	}
 
 	// Check that no error message is set
-	resultModel := newModel.(model)
-	if resultModel.currentMessage != nil {
+	if newModel.currentMessage != nil {
 		t.Error("Expected no error message when quitting with saved buffers")
 	}
 }
@@ -155,8 +153,8 @@ func TestForceQuit(t *testing.T) {
 	m.buffers[0].filename = "test.txt"
 
 	// Try to force quit
-	quitCmd := commandQuit{}
-	newModel, cmd := quitCmd.Update(m, nil, []string{"!"})
+	quitCmd := commandForceQuit{}
+	newModel, cmd := quitCmd.Update(m, nil, []string{})
 
 	// Should quit even with unsaved buffers
 	if cmd == nil {
@@ -164,8 +162,7 @@ func TestForceQuit(t *testing.T) {
 	}
 
 	// Check that no error message is set
-	resultModel := newModel.(model)
-	if resultModel.currentMessage != nil {
+	if newModel.currentMessage != nil {
 		t.Error("Expected no error message for force quit")
 	}
 } 
