@@ -1,10 +1,10 @@
 package main
 
 import (
+	"github.com/charmbracelet/lipgloss"
+	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	"sort"
 	"strings"
-	tree_sitter "github.com/tree-sitter/go-tree-sitter"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // Token represents a highlighted token with its position and type
@@ -25,7 +25,7 @@ type SyntaxHighlighter struct {
 func NewSyntaxHighlighter(lang *tree_sitter.Language) *SyntaxHighlighter {
 	parser := tree_sitter.NewParser()
 	parser.SetLanguage(lang)
-	
+
 	return &SyntaxHighlighter{
 		parser:   parser,
 		language: lang,
@@ -40,10 +40,10 @@ func (sh *SyntaxHighlighter) Highlight(content string) []Token {
 
 	tree := sh.parser.Parse([]byte(content), nil)
 	root := tree.RootNode()
-	
+
 	var tokens []Token
 	sh.collectTokens(root, content, &tokens)
-	
+
 	return tokens
 }
 
@@ -65,7 +65,7 @@ func (sh *SyntaxHighlighter) collectTokens(root *tree_sitter.Node, content strin
 				Type: n.Kind(), Text: content[startByte:endByte],
 			})
 		}
-		for i := 0; i < int(n.ChildCount()); i++ {
+		for i := range int(n.ChildCount()) {
 			walk(n.Child(uint(i)))
 		}
 	}
@@ -118,20 +118,20 @@ func (b buffer) HighlightLine(lineIndex int) string {
 		}
 		content.WriteString(b.lines[i])
 	}
-	
+
 	fullContent := content.String()
-	
+
 	// Create a highlighter and get tokens
 	highlighter := NewSyntaxHighlighter(b.language)
 	tokens := highlighter.Highlight(fullContent)
-	
+
 	// Find tokens that belong to this line
 	lineStart := 0
 	for i := 0; i < lineIndex; i++ {
 		lineStart += len(b.lines[i]) + 1 // +1 for newline
 	}
 	lineEnd := lineStart + len(b.lines[lineIndex])
-	
+
 	// Apply highlighting to the line
 	return b.applyHighlighting(b.lines[lineIndex], tokens, lineStart, lineEnd)
 }
@@ -149,16 +149,16 @@ func (b buffer) applyHighlighting(line string, tokens []Token, lineStart, lineEn
 	for _, token := range tokens {
 		tokenStart := int(token.StartByte)
 		tokenEnd := int(token.EndByte)
-		
+
 		// Skip tokens that don't overlap with this line
 		if tokenEnd <= lineStart || tokenStart >= lineEnd {
 			continue
 		}
-		
+
 		// Calculate the position within the line
 		lineTokenStart := tokenStart - lineStart
 		lineTokenEnd := tokenEnd - lineStart
-		
+
 		// Ensure bounds are within the line
 		if lineTokenStart < 0 {
 			lineTokenStart = 0
@@ -166,25 +166,25 @@ func (b buffer) applyHighlighting(line string, tokens []Token, lineStart, lineEn
 		if lineTokenEnd > len(line) {
 			lineTokenEnd = len(line)
 		}
-		
+
 		// Add text before this token
 		if lineTokenStart > currentPos {
 			result.WriteString(line[currentPos:lineTokenStart])
 		}
-		
+
 		// Add the highlighted token
 		tokenText := line[lineTokenStart:lineTokenEnd]
 		style := b.style.GetTokenStyle(token.Type)
 		result.WriteString(style.Render(tokenText))
-		
+
 		currentPos = lineTokenEnd
 	}
-	
+
 	// Add remaining text after the last token
 	if currentPos < len(line) {
 		result.WriteString(line[currentPos:])
 	}
-	
+
 	return result.String()
 }
 
@@ -247,4 +247,4 @@ func (b buffer) applyHighlightingToLine(line string, tokens []Token) []StyledChu
 		chunks = append(chunks, StyledChunk{Content: currentChunk.String(), Style: currentStyle})
 	}
 	return chunks
-} 
+}
