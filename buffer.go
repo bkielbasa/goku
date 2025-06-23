@@ -7,6 +7,17 @@ import (
 
 	"github.com/bkielbasa/goku/normalmode"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/mattn/go-runewidth"
+	tree_sitter "github.com/tree-sitter/go-tree-sitter"
+	c "github.com/tree-sitter/tree-sitter-c/bindings/go"
+	cpp "github.com/tree-sitter/tree-sitter-cpp/bindings/go"
+	golang "github.com/tree-sitter/tree-sitter-go/bindings/go"
+	html "github.com/tree-sitter/tree-sitter-html/bindings/go"
+	java "github.com/tree-sitter/tree-sitter-java/bindings/go"
+	json "github.com/tree-sitter/tree-sitter-json/bindings/go"
+	python "github.com/tree-sitter/tree-sitter-python/bindings/go"
+	ruby "github.com/tree-sitter/tree-sitter-ruby/bindings/go"
+	rust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
 )
 
 type bufferState string
@@ -27,6 +38,9 @@ type buffer struct {
 	viewport                     tea.WindowSizeMsg
 
 	style editorStyle
+
+	parser   *tree_sitter.Parser
+	language *tree_sitter.Language
 }
 
 type newBufferOps func(b *buffer)
@@ -44,19 +58,58 @@ func bufferWithContent(f, c string) func(b *buffer) {
 
 func newBuffer(style editorStyle, ops ...newBufferOps) buffer {
 	b := buffer{
-		state:         bufferStateUnnamed,
-		cursorY:       0,
-		lines:         []string{""},
-		cursorYOffset: 0,
-		viewport:      tea.WindowSizeMsg{},
-		style:         style,
+		state:    bufferStateUnnamed,
+		lines:    []string{""},
+		viewport: tea.WindowSizeMsg{},
+		style:    style,
 	}
+
+	var parser *tree_sitter.Parser
 
 	for _, f := range ops {
 		f(&b)
 	}
 
+	if b.filename != "" {
+		lang := detectLanguage(b.filename)
+		if lang != nil {
+			parser = tree_sitter.NewParser()
+			parser.SetLanguage(lang)
+
+			b.parser = parser
+			b.language = lang
+		}
+	}
+
 	return b
+}
+
+func detectLanguage(filename string) *tree_sitter.Language {
+	parts := strings.Split(filename, ".")
+	ext := parts[len(parts)-1]
+
+	switch ext {
+	case "go":
+		return tree_sitter.NewLanguage(golang.Language())
+	case "c", "h":
+		return tree_sitter.NewLanguage(c.Language())
+	case "cpp", "cxx", "hpp":
+		return tree_sitter.NewLanguage(cpp.Language())
+	case "html":
+		return tree_sitter.NewLanguage(html.Language())
+	case "java":
+		return tree_sitter.NewLanguage(java.Language())
+	case "json":
+		return tree_sitter.NewLanguage(json.Language())
+	case "py":
+		return tree_sitter.NewLanguage(python.Language())
+	case "rb":
+		return tree_sitter.NewLanguage(ruby.Language())
+	case "rs":
+		return tree_sitter.NewLanguage(rust.Language())
+	}
+
+	return nil
 }
 
 func (b buffer) SetStateModified() normalmode.Buffer {
@@ -76,21 +129,50 @@ func (m buffer) View() string {
 		visual := expandTabs(line)
 		b.WriteString(lineNumber(y+1, len(m.lines)))
 
+		styledChunks := m.HighlightString(visual)
+
 		if y == m.cursorY {
 			visX := visualCursorX(line, m.cursorX)
-			if visX > len(visual) {
-				visX = len(visual)
-			}
-			b.WriteString(visual[:visX])
+			renderedCursor := false
+			currentCol := 0
 
-			if visX < len(visual) {
-				b.WriteString(m.style.cursor.Render(string(visual[visX])))
-				b.WriteString(visual[visX+1:])
-			} else {
+			for _, chunk := range styledChunks {
+				chunkWidth := runewidth.StringWidth(chunk.Content)
+				if !renderedCursor && visX >= currentCol && visX < currentCol+chunkWidth {
+					// The cursor is in this chunk
+					offsetInChunk := visX - currentCol
+					var before, at, after strings.Builder
+					w := 0
+					found := false
+					for _, r := range chunk.Content {
+						runeW := runewidth.RuneWidth(r)
+						if !found && w >= offsetInChunk {
+							at.WriteRune(r)
+							found = true
+						} else if !found {
+							before.WriteRune(r)
+						} else {
+							after.WriteRune(r)
+						}
+						w += runeW
+					}
+					b.WriteString(chunk.Style.Render(before.String()))
+					b.WriteString(m.style.cursor.Render(chunk.Style.Render(at.String())))
+					b.WriteString(chunk.Style.Render(after.String()))
+					renderedCursor = true
+				} else {
+					b.WriteString(chunk.Style.Render(chunk.Content))
+				}
+				currentCol += chunkWidth
+			}
+
+			if !renderedCursor {
 				b.WriteString(m.style.cursor.Render(" "))
 			}
 		} else {
-			b.WriteString(visual)
+			for _, chunk := range styledChunks {
+				b.WriteString(chunk.Style.Render(chunk.Content))
+			}
 		}
 		b.WriteRune('\n')
 	}
@@ -195,7 +277,20 @@ const tabSize = 4
 func expandTabs(s string) string {
 	var b strings.Builder
 	col := 0
+	inEscape := false
 	for _, r := range s {
+		if r == '\x1b' {
+			inEscape = true
+		}
+
+		if inEscape {
+			b.WriteRune(r)
+			if r == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+
 		if r == '\t' {
 			spaces := tabSize - (col % tabSize)
 			b.WriteString(strings.Repeat(" ", spaces))
@@ -228,26 +323,40 @@ func loadFile(filename string, style editorStyle) (buffer, error) {
 
 	// Split content into lines, but preserve empty files
 	lines := strings.Split(string(content), "\n")
-	
+
 	// Remove trailing empty line if file ends with newline
 	if len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
 	}
-	
+
 	// Ensure we always have at least one line
 	if len(lines) == 0 {
 		lines = []string{""}
 	}
 
-	b := buffer{
-		state:         bufferStateSaved,
-		lines:         lines,
-		filename:      filename,
-		cursorY:       0,
-		cursorYOffset: 0,
-		viewport:      tea.WindowSizeMsg{},
-		style:         style,
-	}
+	b := newBuffer(style, bufferWithContent(filename, string(content)))
 
 	return b, nil
+}
+
+func findByteIndexForVisualColumn(s string, col int) int {
+	var visualCol int = 0
+	inEscape := false
+	for i, r := range s {
+		if r == '\x1b' {
+			inEscape = true
+		}
+
+		if !inEscape {
+			if visualCol >= col {
+				return i
+			}
+			visualCol += runewidth.RuneWidth(r)
+		}
+
+		if inEscape && r == 'm' {
+			inEscape = false
+		}
+	}
+	return len(s)
 }
