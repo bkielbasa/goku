@@ -52,39 +52,24 @@ func (sh *SyntaxHighlighter) collectTokens(root *tree_sitter.Node, content strin
 	if root == nil {
 		return
 	}
-
-	cursor := root.Walk()
-	defer cursor.Close()
-
-	for {
-		node := cursor.Node()
-		startByte := uint32(node.StartByte())
-		endByte := uint32(node.EndByte())
-
-		if startByte < endByte && endByte <= uint32(len(content)) {
+	var walk func(*tree_sitter.Node)
+	walk = func(n *tree_sitter.Node) {
+		if n == nil {
+			return
+		}
+		startByte := uint32(n.StartByte())
+		endByte := uint32(n.EndByte())
+		if startByte < endByte {
 			*tokens = append(*tokens, Token{
-				StartByte: startByte,
-				EndByte:   endByte,
-				Type:      node.Kind(),
-				Text:      content[startByte:endByte],
+				StartByte: startByte, EndByte: endByte,
+				Type: n.Kind(), Text: content[startByte:endByte],
 			})
 		}
-
-		if cursor.GotoFirstChild() {
-			continue
-		}
-		if cursor.GotoNextSibling() {
-			continue
-		}
-		for {
-			if !cursor.GotoParent() {
-				return
-			}
-			if cursor.GotoNextSibling() {
-				break
-			}
+		for i := 0; i < int(n.ChildCount()); i++ {
+			walk(n.Child(uint(i)))
 		}
 	}
+	walk(root)
 }
 
 // GetTokenStyle returns the appropriate style for a given token type
@@ -225,15 +210,11 @@ func (b buffer) applyHighlightingToLine(line string, tokens []Token) []StyledChu
 	if len(line) == 0 {
 		return nil
 	}
-
 	styles := make([]lipgloss.Style, len(line))
 	for i := range styles {
 		styles[i] = b.style.text
 	}
-
 	sort.SliceStable(tokens, func(i, j int) bool {
-		// Sort by start byte ascending, then by end byte descending.
-		// This ensures that larger nodes are processed before their smaller children.
 		if tokens[i].StartByte != tokens[j].StartByte {
 			return tokens[i].StartByte < tokens[j].StartByte
 		}
@@ -250,20 +231,20 @@ func (b buffer) applyHighlightingToLine(line string, tokens []Token) []StyledChu
 	}
 
 	var chunks []StyledChunk
-	var currentChunk strings.Builder
-	currentStyle := styles[0]
-
-	for i, r := range line {
-		if styles[i].Render(" ") == currentStyle.Render(" ") {
-			currentChunk.WriteRune(r)
-		} else {
-			chunks = append(chunks, StyledChunk{Content: currentChunk.String(), Style: currentStyle})
-			currentChunk.Reset()
-			currentChunk.WriteRune(r)
-			currentStyle = styles[i]
+	if len(line) > 0 {
+		var currentChunk strings.Builder
+		currentStyle := styles[0]
+		for i, r := range line {
+			if styles[i].Render(" ") == currentStyle.Render(" ") {
+				currentChunk.WriteRune(r)
+			} else {
+				chunks = append(chunks, StyledChunk{Content: currentChunk.String(), Style: currentStyle})
+				currentChunk.Reset()
+				currentChunk.WriteRune(r)
+				currentStyle = styles[i]
+			}
 		}
+		chunks = append(chunks, StyledChunk{Content: currentChunk.String(), Style: currentStyle})
 	}
-	chunks = append(chunks, StyledChunk{Content: currentChunk.String(), Style: currentStyle})
-
 	return chunks
 } 

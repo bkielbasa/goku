@@ -27,7 +27,7 @@ func newEditorStyle() editorStyle {
 		comment:     lipgloss.NewStyle().Foreground(lipgloss.Color("#808080")).Italic(true),                         // grey
 		number:      lipgloss.NewStyle().Foreground(lipgloss.Color("#6897bb")),                                     // lightblue
 		function:    lipgloss.NewStyle().Foreground(lipgloss.Color("#eedd82")),                                     // yellow
-		typeName:    lipgloss.NewStyle().Foreground(lipgloss.Color("#d0d0d0")),                                     // white
+		typeName:    lipgloss.NewStyle().Foreground(lipgloss.Color("#8be9fd")),                                     // cyan
 		operator:    lipgloss.NewStyle().Foreground(lipgloss.Color("#d8d8d8")),                                     // grey05
 		punctuation: lipgloss.NewStyle().Foreground(lipgloss.Color("#d8d8d8")),                                     // grey05
 		text:        lipgloss.NewStyle().Foreground(lipgloss.Color("#d0d0d0")),                                     // white
