@@ -9,9 +9,7 @@ func (m model) updateInsert(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "esc":
-			fallthrough
-		case "alt+esc":
+		case "esc", "alt+esc":
 			m.mode = ModeNormal
 			m.commandBuffer = ""
 		case "enter":
@@ -43,6 +41,8 @@ func (m model) updateInsert(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.Type {
 			case tea.KeyRunes:
 				s = string(msg.Runes)
+			case tea.KeySpace:
+				s = " "
 			default:
 				return m, nil
 			}
