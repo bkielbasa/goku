@@ -15,7 +15,7 @@ func (nm *normalmode) commandDown(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cm
 	} else {
 		b = b.IncreaseCursorY(1)
 	}
-	
+
 	// Handle viewport scrolling
 	if b.CursorY() >= b.CursorYOffset()+b.Viewport().Height-2 {
 		b = b.IncreaseCursorYOffset(1)
@@ -35,7 +35,7 @@ func (nm *normalmode) commandUp(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd)
 	} else {
 		b = b.IncreaseCursorY(-1)
 	}
-	
+
 	// Handle viewport scrolling
 	if b.CursorY() < b.CursorYOffset() {
 		b = b.IncreaseCursorYOffset(-1)
@@ -61,7 +61,7 @@ func (nm *normalmode) commandLeft(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cm
 func (nm *normalmode) commandRight(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	b := m.CurrentBuffer()
 
-	if b.CursorX() < len(b.Line(b.CursorY())) {
+	if b.CursorX() < len(b.Line(b.CursorY()))-1 {
 		b = b.IncreaseCursorX(1)
 	}
 
