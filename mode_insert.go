@@ -20,7 +20,7 @@ func (m model) updateInsert(msg tea.Msg) (tea.Model, tea.Cmd) {
 			buff = buff.IncreaseCursorX(-1)
 		case "right":
 			if buff.CursorX() < len(buff.Line(buff.CursorY())) {
-				buff.IncreaseCursorX(1)
+				buff = buff.IncreaseCursorX(1)
 			}
 		case "up":
 			buff = buff.IncreaseCursorY(-1)
@@ -33,7 +33,7 @@ func (m model) updateInsert(msg tea.Msg) (tea.Model, tea.Cmd) {
 				line := buff.Line(buff.CursorY())
 
 				line = line[:buff.CursorX()-1] + line[buff.CursorX():]
-				buff.IncreaseCursorX(-1)
+				buff = buff.IncreaseCursorX(-1)
 				buff = buff.ReplaceLine(buff.CursorY(), line)
 			}
 		default:

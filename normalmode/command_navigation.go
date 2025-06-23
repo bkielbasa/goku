@@ -17,11 +17,6 @@ func (nm *normalmode) commandDown(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cm
 		b = b.IncreaseCursorY(1)
 	}
 
-	// Handle viewport scrolling
-	if b.CursorY() >= b.CursorYOffset()+b.Viewport().Height-2 {
-		b = b.IncreaseCursorYOffset(1)
-	}
-
 	m = m.ReplaceCurrentBuffer(b)
 
 	return m, cmd
@@ -35,11 +30,6 @@ func (nm *normalmode) commandUp(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd)
 		b = b.SetCursorY(b.NoOfLines() - 1)
 	} else {
 		b = b.IncreaseCursorY(-1)
-	}
-
-	// Handle viewport scrolling
-	if b.CursorY() < b.CursorYOffset() {
-		b = b.IncreaseCursorYOffset(-1)
 	}
 
 	m = m.ReplaceCurrentBuffer(b)

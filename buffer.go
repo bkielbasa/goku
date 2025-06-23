@@ -195,7 +195,7 @@ func (b buffer) SetCursorX(n int) normalmode.Buffer {
 
 func (b buffer) SetCursorY(n int) normalmode.Buffer {
 	b.cursorY = n
-	return b
+	return b.adjustViewportForCursor()
 }
 
 func (b buffer) IncreaseCursorX(n int) normalmode.Buffer {
@@ -212,7 +212,7 @@ func (b buffer) IncreaseCursorY(n int) normalmode.Buffer {
 		b.cursorY = 0
 	}
 
-	return b
+	return b.adjustViewportForCursor()
 }
 
 func (b buffer) IncreaseCursorYOffset(n int) normalmode.Buffer {
@@ -221,6 +221,27 @@ func (b buffer) IncreaseCursorYOffset(n int) normalmode.Buffer {
 		b.cursorYOffset = 0
 	}
 
+	return b
+}
+
+// adjustViewportForCursor ensures the cursor stays within the viewport
+func (b buffer) adjustViewportForCursor() normalmode.Buffer {
+	// If cursor is above the viewport, scroll up
+	if b.cursorY < b.cursorYOffset {
+		b.cursorYOffset = b.cursorY
+	}
+	
+	// If cursor is below the viewport, scroll down
+	// The -2 accounts for status bar and other UI elements
+	if b.cursorY >= b.cursorYOffset+b.viewport.Height-2 {
+		b.cursorYOffset = b.cursorY - (b.viewport.Height - 3)
+	}
+	
+	// Ensure viewport doesn't go below 0
+	if b.cursorYOffset < 0 {
+		b.cursorYOffset = 0
+	}
+	
 	return b
 }
 
