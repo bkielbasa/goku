@@ -6,6 +6,7 @@ import (
 
 	"github.com/bkielbasa/goku/normalmode"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type editorMode string
@@ -14,16 +15,27 @@ const ModeNormal editorMode = "normal"
 const ModeInsert editorMode = "insert"
 const ModeCommand editorMode = "command"
 
+type messageType string
+
+const MessageInfo messageType = "info"
+const MessageError messageType = "error"
+
+type message struct {
+	text    string
+	msgType messageType
+}
+
 type normalMode interface {
 	Handle(msg tea.KeyMsg, m normalmode.EditorModel) (normalmode.NormalMode, tea.Model, tea.Cmd)
 }
 
 type model struct {
-	mode          editorMode
-	normalmode    normalMode
-	commandBuffer string // Buffer for command mode input
-	commands      []command
-	viewport      tea.WindowSizeMsg
+	mode           editorMode
+	normalmode     normalMode
+	commandBuffer  string // Buffer for command mode input
+	commands       []command
+	viewport       tea.WindowSizeMsg
+	currentMessage *message
 
 	buffers    []buffer
 	currBuffer int
@@ -56,6 +68,7 @@ func initialModel(opts ...modelOption) model {
 		normalmode: normalmode.New(),
 		commands: []command{
 			&commandQuit{},
+			&commandForceQuit{},
 			&commandOpen{},
 			&commandWrite{},
 		},
@@ -97,6 +110,21 @@ func (m model) ReplaceCurrentBuffer(b normalmode.Buffer) normalmode.EditorModel 
 	return m
 }
 
+func (m model) SetInfoMessage(text string) model {
+	m.currentMessage = &message{text: text, msgType: MessageInfo}
+	return m
+}
+
+func (m model) SetErrorMessage(text string) model {
+	m.currentMessage = &message{text: text, msgType: MessageError}
+	return m
+}
+
+func (m model) ClearMessage() model {
+	m.currentMessage = nil
+	return m
+}
+
 func (m model) addBuffer(b buffer) model {
 	b.viewport = m.viewport
 	m.buffers = append(m.buffers, b)
@@ -104,6 +132,13 @@ func (m model) addBuffer(b buffer) model {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Clear the message on any key event (except window resize)
+	if m.currentMessage != nil {
+		if _, ok := msg.(tea.KeyMsg); ok {
+			m = m.ClearMessage()
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.viewport = msg
@@ -142,6 +177,26 @@ func (m model) View() string {
 		}
 
 		b.WriteString(m.style.statusBar.Render(buff + strings.Repeat(" ", pad) + posInfo))
+	}
+
+	// Display message if present
+	if m.currentMessage != nil {
+		b.WriteRune('\n')
+		var messageStyle lipgloss.Style
+		switch m.currentMessage.msgType {
+		case MessageInfo:
+			messageStyle = m.style.messageInfo
+		case MessageError:
+			messageStyle = m.style.messageError
+		}
+
+		// Truncate message if it's too long for the viewport
+		messageText := m.currentMessage.text
+		if len(messageText) > m.viewport.Width {
+			messageText = messageText[:m.viewport.Width-3] + "..."
+		}
+
+		b.WriteString(messageStyle.Render(messageText))
 	}
 
 	return b.String()
