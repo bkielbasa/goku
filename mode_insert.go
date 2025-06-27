@@ -61,6 +61,21 @@ func (m model) updateInsert(msg tea.Msg) (tea.Model, tea.Cmd) {
 					buff = buff.IncreaseCursorX(-1)
 					buff = buff.ReplaceLine(buff.CursorY(), line)
 				}
+			} else if buff.CursorY() > 0 {
+				// At beginning of line, move to end of previous line
+				currentLine := buff.Line(buff.CursorY())
+				previousLine := buff.Line(buff.CursorY() - 1)
+				
+				// Combine previous line with current line
+				combinedLine := previousLine + currentLine
+				buff = buff.ReplaceLine(buff.CursorY()-1, combinedLine)
+				
+				// Move cursor to the end of the previous line
+				buff = buff.IncreaseCursorY(-1)
+				buff = buff.SetCursorX(len(previousLine))
+				
+				// Delete the current line (now that content has been moved)
+				buff = buff.DeleteLine(buff.CursorY() + 1)
 			}
 		default:
 			s := msg.String()

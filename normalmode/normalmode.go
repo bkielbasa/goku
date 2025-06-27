@@ -26,6 +26,7 @@ type Buffer interface {
 	ReplaceLine(n int, s string) Buffer
 	AppendLine(s string) Buffer
 	InsertLine(n int, s string) Buffer
+	DeleteLine(n int) Buffer
 
 	SetStateModified() Buffer
 
