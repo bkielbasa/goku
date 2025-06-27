@@ -297,7 +297,10 @@ func (b buffer) adjustViewportForCursor() normalmode.Buffer {
 }
 
 func (b buffer) Line(n int) string {
-	return b.lines[n]
+	if n >= 0 && n < len(b.lines) {
+		return b.lines[n]
+	}
+	return ""
 }
 
 func (b buffer) Lines() []string {
@@ -336,6 +339,23 @@ func (b buffer) InsertLine(n int, s string) normalmode.Buffer {
 	
 	// Insert the line at position n
 	b.lines = append(b.lines[:n], append([]string{s}, b.lines[n:]...)...)
+	return b
+}
+
+func (b buffer) DeleteLine(n int) normalmode.Buffer {
+	// Ensure n is within bounds
+	if n < 0 || n >= len(b.lines) {
+		return b
+	}
+	
+	// Remove the line at position n
+	b.lines = append(b.lines[:n], b.lines[n+1:]...)
+	
+	// Ensure we always have at least one line
+	if len(b.lines) == 0 {
+		b.lines = []string{""}
+	}
+	
 	return b
 }
 
