@@ -15,17 +15,25 @@ func (c commandWrite) Update(m model, msg tea.Msg, args []string) (model, tea.Cm
 		// Write to current buffer's filename
 		buf := m.buffers[m.currBuffer]
 		if buf.filename == "" {
+			m.commandBuffer = ""
+			m.mode = ModeNormal
 			return m.SetErrorMessage("No filename specified"), nil
 		}
 		
 		content := strings.Join(buf.lines, "\n")
 		err := os.WriteFile(buf.filename, []byte(content), 0644)
 		if err != nil {
+			m.commandBuffer = ""
+			m.mode = ModeNormal
 			return m.SetErrorMessage("Failed to write file: " + err.Error()), nil
 		}
 		
 		// Mark buffer as saved
 		m.buffers[m.currBuffer] = buf.SetStateSaved().(buffer)
+		
+		// Clear command buffer and switch to normal mode
+		m.commandBuffer = ""
+		m.mode = ModeNormal
 		return m.SetInfoMessage("File written successfully"), nil
 	}
 
@@ -36,6 +44,8 @@ func (c commandWrite) Update(m model, msg tea.Msg, args []string) (model, tea.Cm
 	
 	err := os.WriteFile(filename, []byte(content), 0644)
 	if err != nil {
+		m.commandBuffer = ""
+		m.mode = ModeNormal
 		return m.SetErrorMessage("Failed to write file: " + err.Error()), nil
 	}
 	
