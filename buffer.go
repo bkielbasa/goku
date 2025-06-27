@@ -325,6 +325,20 @@ func (b buffer) AppendLine(s string) normalmode.Buffer {
 	return b
 }
 
+func (b buffer) InsertLine(n int, s string) normalmode.Buffer {
+	// Ensure n is within bounds
+	if n < 0 {
+		n = 0
+	}
+	if n > len(b.lines) {
+		n = len(b.lines)
+	}
+	
+	// Insert the line at position n
+	b.lines = append(b.lines[:n], append([]string{s}, b.lines[n:]...)...)
+	return b
+}
+
 func (b buffer) ReplaceLine(n int, s string) normalmode.Buffer {
 	b.lines[n] = s
 	return b

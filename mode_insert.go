@@ -13,9 +13,27 @@ func (m model) updateInsert(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mode = ModeNormal
 			m.commandBuffer = ""
 		case "enter":
-			buff = buff.AppendLine("")
+			// Split the current line at cursor position
+			currentLine := buff.Line(buff.CursorY())
+			cursorX := buff.CursorX()
+			
+			// Ensure cursor position is within bounds
+			if cursorX > len(currentLine) {
+				cursorX = len(currentLine)
+			}
+			
+			beforeCursor := currentLine[:cursorX]
+			afterCursor := currentLine[cursorX:]
+			
+			// Replace current line with content before cursor
+			buff = buff.ReplaceLine(buff.CursorY(), beforeCursor)
+			
+			// Insert new line with content after cursor
+			buff = buff.InsertLine(buff.CursorY()+1, afterCursor)
+			
+			// Move cursor to beginning of new line
 			buff = buff.IncreaseCursorY(1)
-			buff = buff.IncreaseCursorX(-buff.CursorX())
+			buff = buff.SetCursorX(0)
 		case "left":
 			buff = buff.IncreaseCursorX(-1)
 		case "right":
@@ -31,10 +49,18 @@ func (m model) updateInsert(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "backspace":
 			if buff.CursorX() > 0 {
 				line := buff.Line(buff.CursorY())
-
-				line = line[:buff.CursorX()-1] + line[buff.CursorX():]
-				buff = buff.IncreaseCursorX(-1)
-				buff = buff.ReplaceLine(buff.CursorY(), line)
+				cursorX := buff.CursorX()
+				
+				// Ensure cursor position is within bounds
+				if cursorX > len(line) {
+					cursorX = len(line)
+				}
+				
+				if cursorX > 0 {
+					line = line[:cursorX-1] + line[cursorX:]
+					buff = buff.IncreaseCursorX(-1)
+					buff = buff.ReplaceLine(buff.CursorY(), line)
+				}
 			}
 		default:
 			s := msg.String()
@@ -48,15 +74,20 @@ func (m model) updateInsert(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			buff = buff.SetStateModified()
-			if buff.CursorX() <= len(buff.Line(buff.CursorY())) {
-				line := buff.Line(buff.CursorY())
-				line = line[:buff.CursorX()] + s + line[buff.CursorX():]
+			cursorX := buff.CursorX()
+			line := buff.Line(buff.CursorY())
+			
+			// Ensure cursor position is within bounds
+			if cursorX > len(line) {
+				cursorX = len(line)
+			}
+			
+			if cursorX <= len(line) {
+				line = line[:cursorX] + s + line[cursorX:]
 				buff = buff.ReplaceLine(buff.CursorY(), line)
 				buff = buff.IncreaseCursorX(1)
 			} else {
-				line := buff.Line(buff.CursorY())
 				line += s
-
 				buff = buff.ReplaceLine(buff.CursorY(), line)
 				buff = buff.IncreaseCursorX(len(s))
 			}

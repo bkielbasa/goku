@@ -158,11 +158,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	var b strings.Builder
-	b.WriteString(m.buffers[m.currBuffer].View())
-
+	// Get the buffer content
+	bufferContent := m.buffers[m.currBuffer].View()
+	
+	// Build the status bar content
+	var statusBarContent string
 	if m.mode == ModeCommand {
-		b.WriteString(fmt.Sprintf(":%s", m.commandBuffer))
+		statusBarContent = fmt.Sprintf(":%s", m.commandBuffer)
 	} else {
 		buf := m.buffers[m.currBuffer]
 		f := fileNameLabel(buf.filename, buf.state)
@@ -176,12 +178,12 @@ func (m model) View() string {
 			pad = 1
 		}
 
-		b.WriteString(m.style.statusBar.Render(buff + strings.Repeat(" ", pad) + posInfo))
+		statusBarContent = m.style.statusBar.Render(buff + strings.Repeat(" ", pad) + posInfo)
 	}
 
-	// Display message if present
+	// Build the message content if present
+	var messageContent string
 	if m.currentMessage != nil {
-		b.WriteRune('\n')
 		var messageStyle lipgloss.Style
 		switch m.currentMessage.msgType {
 		case MessageInfo:
@@ -196,10 +198,48 @@ func (m model) View() string {
 			messageText = messageText[:m.viewport.Width-3] + "..."
 		}
 
-		b.WriteString(messageStyle.Render(messageText))
+		messageContent = messageStyle.Render(messageText)
 	}
 
-	return b.String()
+	// Calculate available height for content (viewport height minus status bar and message)
+	availableHeight := m.viewport.Height
+	if messageContent != "" {
+		availableHeight -= 1 // Message takes one line
+	}
+	availableHeight -= 1 // Status bar takes one line
+
+	// Ensure availableHeight is at least 1 to prevent slice bounds errors
+	if availableHeight < 1 {
+		availableHeight = 1
+	}
+
+	// Split buffer content into lines and ensure it fits within available height
+	bufferLines := strings.Split(bufferContent, "\n")
+	if len(bufferLines) > availableHeight {
+		bufferLines = bufferLines[:availableHeight]
+	}
+
+	// Pad the content to fill the available height
+	for len(bufferLines) < availableHeight {
+		bufferLines = append(bufferLines, "")
+	}
+
+	// Join the content lines
+	content := strings.Join(bufferLines, "\n")
+
+	// Build the final layout
+	var result strings.Builder
+	result.WriteString(content)
+	
+	if messageContent != "" {
+		result.WriteRune('\n')
+		result.WriteString(messageContent)
+	}
+	
+	result.WriteRune('\n')
+	result.WriteString(statusBarContent)
+
+	return result.String()
 }
 
 func fileNameLabel(filename string, s bufferState) string {
