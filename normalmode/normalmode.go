@@ -29,6 +29,7 @@ type Buffer interface {
 	DeleteLine(n int) Buffer
 
 	SetStateModified() Buffer
+	SetStateSaved() Buffer
 
 	FileName() string
 	SetFileName(f string) Buffer

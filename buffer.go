@@ -117,6 +117,11 @@ func (b buffer) SetStateModified() normalmode.Buffer {
 	return b
 }
 
+func (b buffer) SetStateSaved() normalmode.Buffer {
+	b.state = bufferStateSaved
+	return b
+}
+
 func (m buffer) View() string {
 	var b strings.Builder
 
