@@ -119,6 +119,10 @@ func (b mockBuffer) SetStateModified() Buffer {
 	return b
 }
 
+func (b mockBuffer) SetStateSaved() Buffer {
+	return b
+}
+
 func (b mockBuffer) FileName() string {
 	return ""
 }
