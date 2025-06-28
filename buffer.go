@@ -137,11 +137,11 @@ func (m buffer) View() string {
 		// Apply horizontal scrolling
 		lineNumberWidth := len(fmt.Sprintf("%d", len(m.lines))) + 1
 		availableWidth := m.viewport.Width - lineNumberWidth
-		
+
 		// Trim the line based on horizontal offset
 		startX := m.cursorXOffset
 		endX := startX + availableWidth
-		
+
 		if startX < len(visual) {
 			if endX > len(visual) {
 				endX = len(visual)
@@ -262,13 +262,13 @@ func (b buffer) adjustViewportForCursor() normalmode.Buffer {
 	if b.cursorY < b.cursorYOffset {
 		b.cursorYOffset = b.cursorY
 	}
-	
+
 	// If cursor is below the viewport, scroll down
 	// The -2 accounts for status bar and other UI elements
 	if b.cursorY >= b.cursorYOffset+b.viewport.Height-2 {
 		b.cursorYOffset = b.cursorY - (b.viewport.Height - 3)
 	}
-	
+
 	// Ensure viewport doesn't go below 0
 	if b.cursorYOffset < 0 {
 		b.cursorYOffset = 0
@@ -278,26 +278,26 @@ func (b buffer) adjustViewportForCursor() normalmode.Buffer {
 	// Calculate the visual cursor position (accounting for tabs)
 	line := b.Line(b.cursorY)
 	visualX := visualCursorX(line, b.cursorX)
-	
+
 	// Account for line numbers and padding
 	lineNumberWidth := len(fmt.Sprintf("%d", len(b.lines))) + 1
 	availableWidth := b.viewport.Width - lineNumberWidth
-	
+
 	// If cursor is to the left of the viewport, scroll left
 	if visualX < b.cursorXOffset {
 		b.cursorXOffset = visualX
 	}
-	
+
 	// If cursor is to the right of the viewport, scroll right
 	if visualX >= b.cursorXOffset+availableWidth {
 		b.cursorXOffset = visualX - availableWidth + 1
 	}
-	
+
 	// Ensure viewport doesn't go below 0
 	if b.cursorXOffset < 0 {
 		b.cursorXOffset = 0
 	}
-	
+
 	return b
 }
 
@@ -341,7 +341,7 @@ func (b buffer) InsertLine(n int, s string) normalmode.Buffer {
 	if n > len(b.lines) {
 		n = len(b.lines)
 	}
-	
+
 	// Insert the line at position n
 	b.lines = append(b.lines[:n], append([]string{s}, b.lines[n:]...)...)
 	return b
@@ -352,15 +352,15 @@ func (b buffer) DeleteLine(n int) normalmode.Buffer {
 	if n < 0 || n >= len(b.lines) {
 		return b
 	}
-	
+
 	// Remove the line at position n
 	b.lines = append(b.lines[:n], b.lines[n+1:]...)
-	
+
 	// Ensure we always have at least one line
 	if len(b.lines) == 0 {
 		b.lines = []string{""}
 	}
-	
+
 	return b
 }
 

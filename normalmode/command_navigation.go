@@ -88,6 +88,13 @@ func (nm *normalmode) commandGoToLast(m EditorModel, cmd tea.Cmd) (tea.Model, te
 	return m, cmd
 }
 
+func (nm *normalmode) commandDeleteLine(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.CurrentBuffer()
+	b = b.DeleteLine(b.CursorY())
+
+	return m, cmd
+}
+
 func (nm *normalmode) commandGoToFirstNonWhiteCharacter(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	b := m.CurrentBuffer()
 	l := b.Line(b.CursorY())
@@ -141,12 +148,12 @@ func (nm *normalmode) commandNextWord(m EditorModel, cmd tea.Cmd) (tea.Model, te
 			}
 
 			line = []rune(b.Line(cursorY))
-			
+
 			// Skip empty lines
 			if len(line) == 0 {
 				continue
 			}
-			
+
 			continue
 		}
 
