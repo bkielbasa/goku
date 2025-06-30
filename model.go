@@ -59,6 +59,35 @@ func WithFile(filename string) modelOption {
 	}
 }
 
+func WithFiles(filenames []string) modelOption {
+	return func(m *model) {
+		if len(filenames) == 0 {
+			return
+		}
+		
+		// Clear the initial empty buffer
+		m.buffers = []buffer{}
+		
+		// Create a buffer for each filename
+		for _, filename := range filenames {
+			if filename != "" {
+				// Try to load the file
+				if loadedBuffer, err := loadFile(filename, m.style); err == nil {
+					m.buffers = append(m.buffers, loadedBuffer)
+				} else {
+					// If file doesn't exist or can't be read, create a new buffer with the filename
+					m.buffers = append(m.buffers, newBuffer(m.style, bufferWithContent(filename, "")))
+				}
+			}
+		}
+		
+		// Ensure we have at least one buffer
+		if len(m.buffers) == 0 {
+			m.buffers = []buffer{newBuffer(m.style)}
+		}
+	}
+}
+
 func initialModel(opts ...modelOption) model {
 	s := newEditorStyle()
 
@@ -71,6 +100,10 @@ func initialModel(opts ...modelOption) model {
 			&commandForceQuit{},
 			&commandOpen{},
 			&commandWrite{},
+			&commandBufferNext{},
+			&commandBufferPrev{},
+			&commandBufferLast{},
+			&commandBufferFirst{},
 		},
 		style: s,
 
@@ -170,6 +203,12 @@ func (m model) View() string {
 		f := fileNameLabel(buf.filename, buf.state)
 
 		buff := fmt.Sprintf("%s ", strings.ToUpper(string(m.mode))) + f
+		
+		// Add buffer information if there are multiple buffers
+		if len(m.buffers) > 1 {
+			buff += fmt.Sprintf(" [%d/%d]", m.currBuffer+1, len(m.buffers))
+		}
+		
 		posInfo := filePossitionInfo(buf.cursorY+1, buf.cursorX+1)
 		width := m.CurrentBuffer().Viewport().Width
 

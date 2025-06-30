@@ -76,6 +76,8 @@ func New() normalmode {
 		"gl": nm.commandGoToLast,
 		"gs": nm.commandGoToFirstNonWhiteCharacter,
 
+		"dd": nm.commandDeleteLine,
+
 		"esc": nm.commandClearBuffer,
 		":":   nm.commandEnterCommandMode,
 		"i":   nm.commandEnterInsertMode,
@@ -115,33 +117,33 @@ func (nm normalmode) Handle(msg tea.KeyMsg, m EditorModel) (NormalMode, tea.Mode
 
 func (nm normalmode) commandOpenLineBelow(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	buff := m.CurrentBuffer()
-	
+
 	// Insert a new empty line below the current line
 	buff = buff.InsertLine(buff.CursorY()+1, "")
-	
+
 	// Move cursor to the new line
 	buff = buff.IncreaseCursorY(1)
 	buff = buff.SetCursorX(0)
-	
+
 	// Replace the buffer and enter insert mode
 	m = m.ReplaceCurrentBuffer(buff)
 	m = m.EnterInsertMode()
-	
+
 	return m, cmd
 }
 
 func (nm normalmode) commandOpenLineAbove(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	buff := m.CurrentBuffer()
-	
+
 	// Insert a new empty line above the current line
 	buff = buff.InsertLine(buff.CursorY(), "")
-	
+
 	// Move cursor to the new line (cursor Y stays the same since we inserted above)
 	buff = buff.SetCursorX(0)
-	
+
 	// Replace the buffer and enter insert mode
 	m = m.ReplaceCurrentBuffer(buff)
 	m = m.EnterInsertMode()
-	
+
 	return m, cmd
 }

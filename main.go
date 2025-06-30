@@ -9,10 +9,16 @@ import (
 func main() {
 	var opts []modelOption
 	
-	// Check if a filename was provided as a command line argument
+	// Check if filenames were provided as command line arguments
 	if len(os.Args) > 1 {
-		filename := os.Args[1]
-		opts = append(opts, WithFile(filename))
+		filenames := os.Args[1:]
+		if len(filenames) == 1 {
+			// Single file - use the existing WithFile option for backward compatibility
+			opts = append(opts, WithFile(filenames[0]))
+		} else {
+			// Multiple files - use the new WithFiles option
+			opts = append(opts, WithFiles(filenames))
+		}
 	}
 	
 	p := tea.NewProgram(initialModel(opts...), tea.WithAltScreen())
