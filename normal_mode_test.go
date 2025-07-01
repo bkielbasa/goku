@@ -342,4 +342,85 @@ func TestEditingCommandsAreRepeatable(t *testing.T) {
 	if m.buffers[0].NoOfLines() != 1 {
 		t.Errorf("Expected 1 line after repeat command, got %d", m.buffers[0].NoOfLines())
 	}
+}
+
+func TestEditingCommandsMarkBufferAsModified(t *testing.T) {
+	nm := NewNormalMode()
+	
+	// Create a buffer with some content
+	style := newEditorStyle()
+	buff := newBuffer(style)
+	buff = buff.ReplaceLine(0, "line 1")
+	buff = buff.AppendLine("line 2")
+	buff = buff.SetCursorX(3)
+	buff = buff.SetCursorY(0)
+	
+	m := model{
+		buffers:  []buffer{buff},
+		currBuffer: 0,
+		mode:     ModeNormal,
+		normalmode: nm,
+	}
+	
+	// Test that dd command marks buffer as modified
+	newNM, newModel, _ := m.normalmode.Handle(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}, m)
+	m = newModel.(model)
+	m.normalmode = newNM
+
+	newNM, newModel, _ = m.normalmode.Handle(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}, m)
+	m = newModel.(model)
+	m.normalmode = newNM
+	
+	// Check that buffer is marked as modified
+	if m.buffers[0].state != bufferStateModified {
+		t.Errorf("Expected buffer state to be modified after dd command, got %s", m.buffers[0].state)
+	}
+	
+	// Reset buffer for next test
+	buff = newBuffer(style)
+	buff = buff.ReplaceLine(0, "line 1")
+	buff = buff.AppendLine("line 2")
+	buff = buff.SetCursorX(3)
+	buff = buff.SetCursorY(0)
+	
+	m = model{
+		buffers:  []buffer{buff},
+		currBuffer: 0,
+		mode:     ModeNormal,
+		normalmode: nm,
+	}
+	
+	// Test that o command marks buffer as modified
+	newNM, newModel, _ = m.normalmode.Handle(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}}, m)
+	m = newModel.(model)
+	m.normalmode = newNM
+	
+	// Check that buffer is marked as modified
+	if m.buffers[0].state != bufferStateModified {
+		t.Errorf("Expected buffer state to be modified after o command, got %s", m.buffers[0].state)
+	}
+	
+	// Reset buffer for next test
+	buff = newBuffer(style)
+	buff = buff.ReplaceLine(0, "line 1")
+	buff = buff.AppendLine("line 2")
+	buff = buff.SetCursorX(3)
+	buff = buff.SetCursorY(1)
+	
+	m = model{
+		buffers:  []buffer{buff},
+		currBuffer: 0,
+		mode:     ModeNormal,
+		normalmode: nm,
+	}
+	
+	// Test that O command marks buffer as modified
+	newNM, newModel, _ = m.normalmode.Handle(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'O'}}, m)
+	m = newModel.(model)
+	m.normalmode = newNM
+	
+	// Check that buffer is marked as modified
+	if m.buffers[0].state != bufferStateModified {
+		t.Errorf("Expected buffer state to be modified after O command, got %s", m.buffers[0].state)
+	}
 } 

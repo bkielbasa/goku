@@ -26,7 +26,7 @@ type message struct {
 
 type model struct {
 	mode           editorMode
-	normalmode     normalmode
+	normalmode     *normalmode
 	commandBuffer  string // Buffer for command mode input
 	commands       []command
 	viewport       tea.WindowSizeMsg
