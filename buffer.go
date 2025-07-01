@@ -445,6 +445,8 @@ func loadFile(filename string, style editorStyle) (buffer, error) {
 	}
 
 	b := newBuffer(style, bufferWithContent(filename, string(content)))
+	// Set the buffer state to saved since we loaded an existing file
+	b.state = bufferStateSaved
 
 	return b, nil
 }

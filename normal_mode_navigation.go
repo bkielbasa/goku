@@ -3,6 +3,7 @@ package main
 import (
 	"slices"
 	"unicode"
+	"unicode/utf16"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -230,11 +231,14 @@ func (nm *normalmode) commandPrevWord(m model, cmd tea.Cmd) (tea.Model, tea.Cmd)
 		// Move back one character
 		cursorX--
 
-		// If we're on a word character, check if we've found the start of a word
-		if !slices.Contains(nextWordSkipCharacters(), line[cursorX]) {
-			// Check if the previous character (if it exists) is a separator
-			if cursorX == 0 || slices.Contains(nextWordSkipCharacters(), line[cursorX-1]) {
-				break
+		// Only check if line is not empty and cursorX is in bounds
+		if len(line) > 0 && cursorX < len(line) && cursorX >= 0 {
+			// If we're on a word character, check if we've found the start of a word
+			if !slices.Contains(nextWordSkipCharacters(), line[cursorX]) {
+				// Check if the previous character (if it exists) is a separator
+				if cursorX == 0 || slices.Contains(nextWordSkipCharacters(), line[cursorX-1]) {
+					break
+				}
 			}
 		}
 	}
@@ -245,6 +249,75 @@ func (nm *normalmode) commandPrevWord(m model, cmd tea.Cmd) (tea.Model, tea.Cmd)
 	m.buffers[m.currBuffer] = b
 
 	return m, cmd
+}
+
+// commandGoToDefinition uses LSP to jump to the definition of the symbol under cursor
+func (nm *normalmode) commandGoToDefinition(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.buffers[m.currBuffer]
+	filePath := b.FileName()
+	if filePath == "" {
+		return m, cmd
+	}
+
+	// Set loading state and start async go-to-definition
+	m.lspLoading = true
+	m.lspError = ""
+	
+	asyncCmd := (&m).AsyncGoToDefinition(filePath, b.cursorY, b.cursorX)
+	return m, asyncCmd
+}
+
+// utf16Index returns the number of UTF-16 code units in s[:cursorX] (where cursorX is a rune index)
+func utf16Index(s string, cursorX int) int {
+	runes := []rune(s)
+	if cursorX > len(runes) {
+		cursorX = len(runes)
+	}
+	return len(utf16.Encode(runes[:cursorX]))
+}
+
+// runeIndexFromUTF16 returns the rune index in s corresponding to the given UTF-16 code unit offset
+func runeIndexFromUTF16(s string, utf16Offset int) int {
+	runes := []rune(s)
+	count := 0
+	for i := 0; i < len(runes); i++ {
+		codeUnits := len(utf16.Encode([]rune{runes[i]}))
+		if count+codeUnits > utf16Offset {
+			return i
+		}
+		count += codeUnits
+	}
+	return len(runes)
+}
+
+// extractIdentifierAt extracts the identifier at the given cursor position
+func extractIdentifierAt(line string, cursorX int) string {
+	runes := []rune(line)
+	if cursorX >= len(runes) {
+		return ""
+	}
+	
+	// Find the start of the identifier
+	start := cursorX
+	for start > 0 {
+		r := runes[start-1]
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' {
+			break
+		}
+		start--
+	}
+	
+	// Find the end of the identifier
+	end := cursorX
+	for end < len(runes) {
+		r := runes[end]
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' {
+			break
+		}
+		end++
+	}
+	
+	return string(runes[start:end])
 }
 
 func nextWordSkipCharacters() []rune {

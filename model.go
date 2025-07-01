@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -52,6 +55,10 @@ type model struct {
 
 	// Language support info, keyed by language name or extension
 	Languages map[string]languageSupport
+	
+	// LSP async state
+	lspLoading bool
+	lspError   string
 }
 
 type modelOption func(*model)
@@ -168,6 +175,19 @@ func initialModel(opts ...modelOption) model {
 	return m
 }
 
+// AsyncGoToDefinitionCmd represents an async go-to-definition command
+type asyncGoToDefinitionCmd struct {
+	filePath string
+	line     int
+	character int
+}
+
+// AsyncGoToDefinitionResult represents the result of an async go-to-definition
+type asyncGoToDefinitionResult struct {
+	location *location
+	error    error
+}
+
 func (m model) Init() tea.Cmd {
 	return nil
 }
@@ -225,6 +245,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport = msg
 		m.buffers[m.currBuffer].viewport = msg
 		return m, nil
+	case asyncGoToDefinitionResult:
+		m.lspLoading = false
+		if msg.error != nil {
+			m.lspError = msg.error.Error()
+			return m, nil
+		}
+		if msg.location != nil {
+			// Handle successful go-to-definition
+			return m.handleGoToDefinitionResult(msg.location), nil
+		}
+		return m, nil
 	}
 
 	switch m.mode {
@@ -256,16 +287,48 @@ func (m model) View() string {
 		if len(m.buffers) > 1 {
 			buff += fmt.Sprintf(" [%d/%d]", m.currBuffer+1, len(m.buffers))
 		}
-		
+
+		// LSP status info
+		lspStatus := ""
+		langExt := ""
+		if buf.filename != "" {
+			parts := strings.Split(buf.filename, ".")
+			if len(parts) > 1 {
+				langExt = parts[len(parts)-1]
+			}
+		}
+		if langExt != "" {
+			if lang, ok := m.Languages[langExt]; ok {
+				lspName := lang.LSPServer.Name
+				if lspName != "" {
+					if lang.LSPServer.IsInstalled {
+						if m.lspLoading {
+							lspStatus = fmt.Sprintf("%s⏳ ", lspName)
+						} else {
+							lspStatus = fmt.Sprintf("%s✅ ", lspName)
+						}
+					} else {
+						lspStatus = fmt.Sprintf("%s❌ ", lspName)
+					}
+				}
+			}
+		}
+
+		// Add LSP error if any
+		if m.lspError != "" {
+			lspStatus += fmt.Sprintf("ERR: %s ", m.lspError)
+		}
+
 		posInfo := filePossitionInfo(buf.cursorY+1, buf.cursorX+1)
 		width := m.CurrentBuffer().Viewport().Width
 
-		pad := width - len(buff) - len(posInfo)
+		// Compose status bar: left | lspStatus | right
+		pad := width - len(buff) - len(lspStatus) - len(posInfo)
 		if pad < 1 {
 			pad = 1
 		}
 
-		statusBarContent = m.style.statusBar.Render(buff + strings.Repeat(" ", pad) + posInfo)
+		statusBarContent = m.style.statusBar.Render(buff + strings.Repeat(" ", pad) + lspStatus + posInfo)
 	}
 
 	// Build the message content if present
@@ -375,4 +438,141 @@ func (m *model) updateLanguageSupport() {
 		// Update the map
 		m.Languages[lang] = support
 	}
+}
+
+// getPersistentLSPClient returns a persistent LSP client for the file, using the global LSP client manager
+func (m *model) getPersistentLSPClient(filePath string) (*lspClient, error) {
+	// Find language
+	ext := strings.ToLower(filepath.Ext(filePath))
+	if strings.HasPrefix(ext, ".") {
+		ext = ext[1:]
+	}
+	lang, exists := m.Languages[ext]
+	if !exists {
+		return nil, fmt.Errorf("no language support found for extension: %s", ext)
+	}
+	if !lang.LSPServer.IsInstalled {
+		return nil, fmt.Errorf("LSP server %s is not installed", lang.LSPServer.Name)
+	}
+	
+	// Use the global LSP client manager
+	rootPath := filepath.Dir(filePath)
+	return lspClientManager.GetLSPClient(lang.LSPServer.Name, rootPath)
+}
+
+// AsyncGoToDefinition creates an async command for go-to-definition
+func (m *model) AsyncGoToDefinition(filePath string, line, character int) tea.Cmd {
+	return func() tea.Msg {
+		client, err := m.getPersistentLSPClient(filePath)
+		if err != nil {
+			return asyncGoToDefinitionResult{error: err}
+		}
+
+		// Get the workspace root directory
+		workspaceRoot := filepath.Dir(filePath)
+		absWorkspaceRoot, err := filepath.Abs(workspaceRoot)
+		if err != nil {
+			return asyncGoToDefinitionResult{error: err}
+		}
+
+		// Open all Go files in the workspace for better indexing
+		err = filepath.Walk(absWorkspaceRoot, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() && strings.HasSuffix(path, ".go") {
+				content, err := os.ReadFile(path)
+				if err != nil {
+					return nil // Continue with other files
+				}
+				err = client.OpenDocument(path, string(content))
+				if err != nil {
+					// Continue with other files
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return asyncGoToDefinitionResult{error: err}
+		}
+		
+		// Wait much longer for the server to fully load packages
+		if !client.WaitForReady(30 * time.Second) {
+			return asyncGoToDefinitionResult{error: fmt.Errorf("LSP server not ready after 30 seconds")}
+		}
+
+		// Additional wait to ensure packages are fully indexed
+		time.Sleep(5 * time.Second)
+
+		// Calculate UTF-16 offset for the cursor position
+		b := m.buffers[m.currBuffer]
+		lineStr := b.Line(line)
+		utf16Offset := utf16Index(lineStr, character)
+
+		// Debug: show what character we're on
+		if character < len([]rune(lineStr)) {
+			charAtCursor := []rune(lineStr)[character]
+			_ = charAtCursor // Suppress unused variable warning
+		}
+		
+		// Debug: show the identifier at cursor position
+		identifier := extractIdentifierAt(lineStr, character)
+		_ = identifier // Suppress unused variable warning
+
+		location, err := client.GoToDefinition(filePath, line, utf16Offset)
+		return asyncGoToDefinitionResult{location: location, error: err}
+	}
+}
+
+// handleGoToDefinitionResult processes the result of a go-to-definition request
+func (m model) handleGoToDefinitionResult(location *location) model {
+	fileURI := location.URI
+	filePath := ""
+	if strings.HasPrefix(fileURI, "file://") {
+		filePath = strings.TrimPrefix(fileURI, "file://")
+		filePath = filepath.FromSlash(filePath)
+	}
+
+	// Normalize the target file path to absolute
+	absTargetPath, err := filepath.Abs(filePath)
+	if err != nil {
+		m.lspError = fmt.Sprintf("Failed to get absolute path: %v", err)
+		return m
+	}
+
+	bufferIndex := -1
+	for i, buf := range m.buffers {
+		// Normalize the buffer's file path to absolute for comparison
+		bufPath := buf.FileName()
+		if bufPath != "" {
+			absBufPath, err := filepath.Abs(bufPath)
+			if err == nil && absBufPath == absTargetPath {
+				bufferIndex = i
+				break
+			}
+		}
+	}
+
+	if bufferIndex == -1 {
+		newBuf, err := loadFile(filePath, m.style)
+		if err != nil {
+			m.lspError = fmt.Sprintf("Failed to load file: %v", err)
+			return m
+		}
+		m.buffers = append(m.buffers, newBuf)
+		bufferIndex = len(m.buffers) - 1
+	}
+
+	m.currBuffer = bufferIndex
+	b := m.buffers[bufferIndex]
+	// Update viewport for the new buffer
+	b.viewport = m.viewport
+	b = b.SetCursorY(location.Range.Start.Line)
+	// Convert UTF-16 offset to rune index for cursor X
+	defLine := b.Line(location.Range.Start.Line)
+	runeX := runeIndexFromUTF16(defLine, location.Range.Start.Character)
+	b = b.SetCursorX(runeX)
+	m.buffers[bufferIndex] = b
+
+	return m
 }

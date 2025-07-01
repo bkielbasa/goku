@@ -44,6 +44,7 @@ func (nm *normalmode) setupCommands() {
 	nm.registerCmd("right", nm.commandRight)
 	nm.registerCmd("w", nm.commandNextWord)
 	nm.registerCmd("b", nm.commandPrevWord)
+	nm.registerCmd("gd", nm.commandGoToDefinition)
 	
 	// File navigation
 	nm.registerCmd("gg", nm.commandGoToBeginingOfTheFile)
