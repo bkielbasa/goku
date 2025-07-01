@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bkielbasa/goku/normalmode"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattn/go-runewidth"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
@@ -112,12 +111,12 @@ func detectLanguage(filename string) *tree_sitter.Language {
 	return nil
 }
 
-func (b buffer) SetStateModified() normalmode.Buffer {
+func (b buffer) SetStateModified() buffer {
 	b.state = bufferStateModified
 	return b
 }
 
-func (b buffer) SetStateSaved() normalmode.Buffer {
+func (b buffer) SetStateSaved() buffer {
 	b.state = bufferStateSaved
 	return b
 }
@@ -210,17 +209,17 @@ func (b buffer) CursorX() int {
 	return b.cursorX
 }
 
-func (b buffer) SetCursorX(n int) normalmode.Buffer {
+func (b buffer) SetCursorX(n int) buffer {
 	b.cursorX = n
 	return b.adjustViewportForCursor()
 }
 
-func (b buffer) SetCursorY(n int) normalmode.Buffer {
+func (b buffer) SetCursorY(n int) buffer {
 	b.cursorY = n
 	return b.adjustViewportForCursor()
 }
 
-func (b buffer) IncreaseCursorX(n int) normalmode.Buffer {
+func (b buffer) IncreaseCursorX(n int) buffer {
 	b.cursorX += n
 	if b.cursorX < 0 {
 		b.cursorX = 0
@@ -228,49 +227,43 @@ func (b buffer) IncreaseCursorX(n int) normalmode.Buffer {
 	return b.adjustViewportForCursor()
 }
 
-func (b buffer) IncreaseCursorY(n int) normalmode.Buffer {
+func (b buffer) IncreaseCursorY(n int) buffer {
 	b.cursorY += n
 	if b.cursorY < 0 {
 		b.cursorY = 0
 	}
-
+	if b.cursorY > len(b.lines) {
+		b.cursorY = len(b.lines)
+	}
 	return b.adjustViewportForCursor()
 }
 
-func (b buffer) IncreaseCursorYOffset(n int) normalmode.Buffer {
+func (b buffer) IncreaseCursorYOffset(n int) buffer {
 	b.cursorYOffset += n
 	if b.cursorYOffset < 0 {
 		b.cursorYOffset = 0
 	}
-
 	return b
 }
 
-func (b buffer) SetCursorYOffset(n int) normalmode.Buffer {
-	if n > len(b.Lines())-1 {
-		n = len(b.Lines()) - 1
-	}
-
-	if n < 1 {
-		n = 0
-	}
-
+func (b buffer) SetCursorYOffset(n int) buffer {
 	b.cursorYOffset = n
-
+	if b.cursorYOffset < 0 {
+		b.cursorYOffset = 0
+	}
 	return b
 }
 
-func (b buffer) IncreaseCursorXOffset(n int) normalmode.Buffer {
+func (b buffer) IncreaseCursorXOffset(n int) buffer {
 	b.cursorXOffset += n
 	if b.cursorXOffset < 0 {
 		b.cursorXOffset = 0
 	}
-
 	return b
 }
 
 // adjustViewportForCursor ensures the cursor stays within the viewport
-func (b buffer) adjustViewportForCursor() normalmode.Buffer {
+func (b buffer) adjustViewportForCursor() buffer {
 	// Vertical viewport adjustment
 	// If cursor is above the viewport, scroll up
 	if b.cursorY < b.cursorYOffset {
@@ -342,44 +335,36 @@ func (b buffer) CursorYOffset() int {
 	return b.cursorYOffset
 }
 
-func (b buffer) AppendLine(s string) normalmode.Buffer {
+func (b buffer) AppendLine(s string) buffer {
 	b.lines = append(b.lines, s)
 	return b
 }
 
-func (b buffer) InsertLine(n int, s string) normalmode.Buffer {
-	// Ensure n is within bounds
+func (b buffer) InsertLine(n int, s string) buffer {
 	if n < 0 {
 		n = 0
 	}
 	if n > len(b.lines) {
 		n = len(b.lines)
 	}
-
-	// Insert the line at position n
 	b.lines = append(b.lines[:n], append([]string{s}, b.lines[n:]...)...)
 	return b
 }
 
-func (b buffer) DeleteLine(n int) normalmode.Buffer {
-	// Ensure n is within bounds
-	if n < 0 || n >= len(b.lines) {
-		return b
+func (b buffer) DeleteLine(n int) buffer {
+	if n >= 0 && n < len(b.lines) {
+		b.lines = append(b.lines[:n], b.lines[n+1:]...)
 	}
-
-	// Remove the line at position n
-	b.lines = append(b.lines[:n], b.lines[n+1:]...)
-
-	// Ensure we always have at least one line
 	if len(b.lines) == 0 {
 		b.lines = []string{""}
 	}
-
 	return b
 }
 
-func (b buffer) ReplaceLine(n int, s string) normalmode.Buffer {
-	b.lines[n] = s
+func (b buffer) ReplaceLine(n int, s string) buffer {
+	if n >= 0 && n < len(b.lines) {
+		b.lines[n] = s
+	}
 	return b
 }
 
@@ -387,7 +372,7 @@ func (b buffer) FileName() string {
 	return b.filename
 }
 
-func (b buffer) SetFileName(f string) normalmode.Buffer {
+func (b buffer) SetFileName(f string) buffer {
 	b.filename = f
 	return b
 }

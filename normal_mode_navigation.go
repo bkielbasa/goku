@@ -1,4 +1,4 @@
-package normalmode
+package main
 
 import (
 	"slices"
@@ -7,125 +7,90 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-func (nm *normalmode) commandDown(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	b := m.CurrentBuffer()
+func (nm *normalmode) commandDown(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.buffers[m.currBuffer]
 
 	// Wrap around to first line if at last line
-	if b.CursorY() >= b.NoOfLines()-1 {
+	if b.cursorY >= b.NoOfLines()-1 {
 		b = b.SetCursorY(0)
 	} else {
 		b = b.IncreaseCursorY(1)
 	}
 
-	m = m.ReplaceCurrentBuffer(b)
+	m.buffers[m.currBuffer] = b
 
 	return m, cmd
 }
 
-func (nm *normalmode) commandUp(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	b := m.CurrentBuffer()
+func (nm *normalmode) commandUp(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.buffers[m.currBuffer]
 
 	// Wrap around to last line if at first line
-	if b.CursorY() <= 0 {
+	if b.cursorY <= 0 {
 		b = b.SetCursorY(b.NoOfLines() - 1)
 	} else {
 		b = b.IncreaseCursorY(-1)
 	}
 
-	m = m.ReplaceCurrentBuffer(b)
+	m.buffers[m.currBuffer] = b
 
 	return m, cmd
 }
 
-func (nm *normalmode) commandLeft(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	b := m.CurrentBuffer()
+func (nm *normalmode) commandLeft(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.buffers[m.currBuffer]
 
-	if b.CursorX() > 0 {
+	if b.cursorX > 0 {
 		b = b.IncreaseCursorX(-1)
 	}
 
-	m = m.ReplaceCurrentBuffer(b)
+	m.buffers[m.currBuffer] = b
 
 	return m, cmd
 }
 
-func (nm *normalmode) commandRight(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	b := m.CurrentBuffer()
+func (nm *normalmode) commandRight(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.buffers[m.currBuffer]
 
-	if b.CursorX() < len(b.Line(b.CursorY()))-1 {
+	if b.cursorX < len(b.Line(b.cursorY))-1 {
 		b = b.IncreaseCursorX(1)
 	}
 
-	m = m.ReplaceCurrentBuffer(b)
+	m.buffers[m.currBuffer] = b
 
 	return m, cmd
 }
 
-func (nm *normalmode) commandGoToBeginingOfTheFile(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	b := m.CurrentBuffer()
+func (nm *normalmode) commandGoToBeginingOfTheFile(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.buffers[m.currBuffer]
 	b = b.SetCursorY(0)
 
-	m = m.ReplaceCurrentBuffer(b)
+	m.buffers[m.currBuffer] = b
 
 	return m, cmd
 }
 
-func (nm *normalmode) commandGoToEndOfTheFile(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	b := m.CurrentBuffer()
+func (nm *normalmode) commandGoToEndOfTheFile(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.buffers[m.currBuffer]
 	b = b.SetCursorY(len(b.Lines()) - 1)
 
-	m = m.ReplaceCurrentBuffer(b)
+	m.buffers[m.currBuffer] = b
 
 	return m, cmd
 }
 
-func (nm *normalmode) commandGoToLast(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	b := m.CurrentBuffer()
-	b = b.SetCursorX(len(b.Line(b.CursorY())))
+func (nm *normalmode) commandGoToLast(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.buffers[m.currBuffer]
+	b = b.SetCursorX(len(b.Line(b.cursorY)))
 
-	m = m.ReplaceCurrentBuffer(b)
-
-	return m, cmd
-}
-
-func (nm *normalmode) commandDeleteLine(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	b := m.CurrentBuffer()
-	b = b.DeleteLine(b.CursorY())
-	m = m.ReplaceCurrentBuffer(b)
+	m.buffers[m.currBuffer] = b
 
 	return m, cmd
 }
 
-func (nm normalmode) commandCenterViewport(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	b := m.CurrentBuffer()
-	n := b.CursorY() - (b.Viewport().Height / 2)
-	b = b.SetCursorYOffset(n)
-	m = m.ReplaceCurrentBuffer(b)
-
-	return m, cmd
-}
-
-func (nm normalmode) commandTopViewport(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	b := m.CurrentBuffer()
-	n := b.CursorY()
-	b = b.SetCursorYOffset(n)
-	m = m.ReplaceCurrentBuffer(b)
-
-	return m, cmd
-}
-
-func (nm normalmode) commandBottomViewport(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	b := m.CurrentBuffer()
-	n := b.CursorY() - b.Viewport().Height + 3
-	b = b.SetCursorYOffset(n)
-	m = m.ReplaceCurrentBuffer(b)
-
-	return m, cmd
-}
-
-func (nm normalmode) commandGoToFirstNonWhiteCharacter(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	b := m.CurrentBuffer()
-	l := b.Line(b.CursorY())
+func (nm normalmode) commandGoToFirstNonWhiteCharacter(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.buffers[m.currBuffer]
+	l := b.Line(b.cursorY)
 	index := 0
 	for i, r := range l {
 		if !unicode.IsSpace(r) {
@@ -134,17 +99,17 @@ func (nm normalmode) commandGoToFirstNonWhiteCharacter(m EditorModel, cmd tea.Cm
 		}
 	}
 	b = b.SetCursorX(index)
-	m = m.ReplaceCurrentBuffer(b)
+	m.buffers[m.currBuffer] = b
 
 	return m, cmd
 }
 
 // commandNextWord moves the cursor to beginning of the next word
-func (nm *normalmode) commandNextWord(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	b := m.CurrentBuffer()
+func (nm *normalmode) commandNextWord(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.buffers[m.currBuffer]
 
-	cursorY := b.CursorY()
-	cursorX := b.CursorX()
+	cursorY := b.cursorY
+	cursorX := b.cursorX
 	line := []rune(b.Line(cursorY))
 
 	// If cursor is at or beyond the end of the line, move to next line
@@ -206,16 +171,16 @@ func (nm *normalmode) commandNextWord(m EditorModel, cmd tea.Cmd) (tea.Model, te
 		break
 	}
 
-	m = m.ReplaceCurrentBuffer(b)
+	m.buffers[m.currBuffer] = b
 
 	return m, cmd
 }
 
-func (nm *normalmode) commandPrevWord(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	b := m.CurrentBuffer()
+func (nm *normalmode) commandPrevWord(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.buffers[m.currBuffer]
 
-	cursorY := b.CursorY()
-	cursorX := b.CursorX()
+	cursorY := b.cursorY
+	cursorX := b.cursorX
 	line := []rune(b.Line(cursorY))
 
 	// If we're at the beginning of the file, wrap to the end
@@ -277,7 +242,7 @@ func (nm *normalmode) commandPrevWord(m EditorModel, cmd tea.Cmd) (tea.Model, te
 	b = b.SetCursorX(cursorX)
 	b = b.SetCursorY(cursorY)
 
-	m = m.ReplaceCurrentBuffer(b)
+	m.buffers[m.currBuffer] = b
 
 	return m, cmd
 }
@@ -305,4 +270,4 @@ func nextWordSkipCharacters() []rune {
 		'>',
 		'=',
 	}
-}
+} 

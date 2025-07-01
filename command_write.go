@@ -29,7 +29,7 @@ func (c commandWrite) Update(m model, msg tea.Msg, args []string) (model, tea.Cm
 		}
 		
 		// Mark buffer as saved
-		m.buffers[m.currBuffer] = buf.SetStateSaved().(buffer)
+		m.buffers[m.currBuffer] = buf.SetStateSaved()
 		
 		// Clear command buffer and switch to normal mode
 		m.commandBuffer = ""
@@ -50,8 +50,8 @@ func (c commandWrite) Update(m model, msg tea.Msg, args []string) (model, tea.Cm
 	}
 	
 	// Update buffer filename and mark as saved
-	buf = buf.SetFileName(filename).(buffer)
-	buf = buf.SetStateSaved().(buffer)
+	buf = buf.SetFileName(filename)
+	buf = buf.SetStateSaved()
 	m.buffers[m.currBuffer] = buf
 	
 	m.commandBuffer = ""

@@ -109,6 +109,6 @@ func (m model) updateInsert(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	m.buffers[m.currBuffer] = buff.(buffer)
+	m.buffers[m.currBuffer] = buff
 	return m, nil
 }

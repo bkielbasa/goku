@@ -9,7 +9,7 @@ func TestBufferInsertLine(t *testing.T) {
 	b := newBuffer(style)
 
 	// Test inserting at beginning
-	b = b.InsertLine(0, "first line").(buffer)
+	b = b.InsertLine(0, "first line")
 	if len(b.lines) != 2 {
 		t.Errorf("Expected 2 lines, got %d", len(b.lines))
 	}
@@ -18,7 +18,7 @@ func TestBufferInsertLine(t *testing.T) {
 	}
 
 	// Test inserting at end
-	b = b.InsertLine(2, "last line").(buffer)
+	b = b.InsertLine(2, "last line")
 	if len(b.lines) != 3 {
 		t.Errorf("Expected 3 lines, got %d", len(b.lines))
 	}
@@ -27,7 +27,7 @@ func TestBufferInsertLine(t *testing.T) {
 	}
 
 	// Test inserting in middle
-	b = b.InsertLine(1, "middle line").(buffer)
+	b = b.InsertLine(1, "middle line")
 	if len(b.lines) != 4 {
 		t.Errorf("Expected 4 lines, got %d", len(b.lines))
 	}
@@ -36,7 +36,7 @@ func TestBufferInsertLine(t *testing.T) {
 	}
 
 	// Test bounds checking - negative index should insert at beginning
-	b = b.InsertLine(-1, "should insert at beginning").(buffer)
+	b = b.InsertLine(-1, "should insert at beginning")
 	if len(b.lines) != 5 {
 		t.Errorf("Expected 5 lines after negative index, got %d", len(b.lines))
 	}
@@ -45,7 +45,7 @@ func TestBufferInsertLine(t *testing.T) {
 	}
 
 	// Test bounds checking - index beyond length should append
-	b = b.InsertLine(10, "should append").(buffer)
+	b = b.InsertLine(10, "should append")
 	if len(b.lines) != 6 {
 		t.Errorf("Expected 6 lines after large index, got %d", len(b.lines))
 	}
@@ -59,12 +59,12 @@ func TestBufferDeleteLine(t *testing.T) {
 	b := newBuffer(style)
 
 	// Add some lines
-	b = b.InsertLine(0, "line 1").(buffer)
-	b = b.InsertLine(1, "line 2").(buffer)
-	b = b.InsertLine(2, "line 3").(buffer)
+	b = b.InsertLine(0, "line 1")
+	b = b.InsertLine(1, "line 2")
+	b = b.InsertLine(2, "line 3")
 
 	// Test deleting middle line
-	b = b.DeleteLine(1).(buffer)
+	b = b.DeleteLine(1)
 	if len(b.lines) != 3 {
 		t.Errorf("Expected 3 lines after delete, got %d", len(b.lines))
 	}
@@ -76,7 +76,7 @@ func TestBufferDeleteLine(t *testing.T) {
 	}
 
 	// Test deleting first line
-	b = b.DeleteLine(0).(buffer)
+	b = b.DeleteLine(0)
 	if len(b.lines) != 2 {
 		t.Errorf("Expected 2 lines after delete first, got %d", len(b.lines))
 	}
@@ -85,13 +85,13 @@ func TestBufferDeleteLine(t *testing.T) {
 	}
 
 	// Test deleting last line
-	b = b.DeleteLine(1).(buffer)
+	b = b.DeleteLine(1)
 	if len(b.lines) != 1 {
 		t.Errorf("Expected 1 line after delete last, got %d", len(b.lines))
 	}
 
 	// Test deleting all lines - should keep at least one empty line
-	b = b.DeleteLine(0).(buffer)
+	b = b.DeleteLine(0)
 	if len(b.lines) != 1 {
 		t.Errorf("Expected 1 line after delete all, got %d", len(b.lines))
 	}
@@ -100,14 +100,14 @@ func TestBufferDeleteLine(t *testing.T) {
 	}
 
 	// Test bounds checking - negative index
-	b = b.InsertLine(0, "test line").(buffer)
-	b = b.DeleteLine(-1).(buffer)
+	b = b.InsertLine(0, "test line")
+	b = b.DeleteLine(-1)
 	if len(b.lines) != 2 {
 		t.Errorf("Expected 2 lines after negative index delete, got %d", len(b.lines))
 	}
 
 	// Test bounds checking - index beyond length
-	b = b.DeleteLine(10).(buffer)
+	b = b.DeleteLine(10)
 	if len(b.lines) != 2 {
 		t.Errorf("Expected 2 lines after out of bounds delete, got %d", len(b.lines))
 	}
@@ -126,13 +126,13 @@ func TestBufferLineOperations(t *testing.T) {
 	}
 
 	// Test replacing line
-	b = b.ReplaceLine(0, "new content").(buffer)
+	b = b.ReplaceLine(0, "new content")
 	if b.Line(0) != "new content" {
 		t.Errorf("Expected 'new content', got '%s'", b.Line(0))
 	}
 
 	// Test appending line
-	b = b.AppendLine("appended line").(buffer)
+	b = b.AppendLine("appended line")
 	if len(b.lines) != 2 {
 		t.Errorf("Expected 2 lines after append, got %d", len(b.lines))
 	}
@@ -151,32 +151,32 @@ func TestBufferCursorOperations(t *testing.T) {
 	}
 
 	// Test setting cursor position
-	b = b.SetCursorX(5).(buffer)
+	b = b.SetCursorX(5)
 	// Add some lines before setting cursor Y to position 2
-	b = b.AppendLine("line 1").(buffer)
-	b = b.AppendLine("line 2").(buffer)
-	b = b.SetCursorY(2).(buffer)
+	b = b.AppendLine("line 1")
+	b = b.AppendLine("line 2")
+	b = b.SetCursorY(2)
 	if b.CursorX() != 5 || b.CursorY() != 2 {
 		t.Errorf("Expected cursor at (5,2), got (%d,%d)", b.CursorX(), b.CursorY())
 	}
 
 	// Test increasing cursor position
-	b = b.IncreaseCursorX(3).(buffer)
-	b = b.IncreaseCursorY(1).(buffer)
+	b = b.IncreaseCursorX(3)
+	b = b.IncreaseCursorY(1)
 	if b.CursorX() != 8 || b.CursorY() != 3 {
 		t.Errorf("Expected cursor at (8,3), got (%d,%d)", b.CursorX(), b.CursorY())
 	}
 
 	// Test decreasing cursor position
-	b = b.IncreaseCursorX(-2).(buffer)
-	b = b.IncreaseCursorY(-1).(buffer)
+	b = b.IncreaseCursorX(-2)
+	b = b.IncreaseCursorY(-1)
 	if b.CursorX() != 6 || b.CursorY() != 2 {
 		t.Errorf("Expected cursor at (6,2), got (%d,%d)", b.CursorX(), b.CursorY())
 	}
 
 	// Test cursor bounds - should not go below 0
-	b = b.IncreaseCursorX(-10).(buffer)
-	b = b.IncreaseCursorY(-10).(buffer)
+	b = b.IncreaseCursorX(-10)
+	b = b.IncreaseCursorY(-10)
 	if b.CursorX() != 0 || b.CursorY() != 0 {
 		t.Errorf("Expected cursor at (0,0) after negative bounds, got (%d,%d)", b.CursorX(), b.CursorY())
 	}

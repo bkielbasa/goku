@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bkielbasa/goku/normalmode"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -25,13 +24,9 @@ type message struct {
 	msgType messageType
 }
 
-type normalMode interface {
-	Handle(msg tea.KeyMsg, m normalmode.EditorModel) (normalmode.NormalMode, tea.Model, tea.Cmd)
-}
-
 type model struct {
 	mode           editorMode
-	normalmode     normalMode
+	normalmode     NormalMode
 	commandBuffer  string // Buffer for command mode input
 	commands       []command
 	viewport       tea.WindowSizeMsg
@@ -94,7 +89,7 @@ func initialModel(opts ...modelOption) model {
 	m := model{
 		mode:       ModeNormal,
 		viewport:   tea.WindowSizeMsg{},
-		normalmode: normalmode.New(),
+		normalmode: NewNormalMode(),
 		commands: []command{
 			&commandQuit{},
 			&commandForceQuit{},
@@ -124,22 +119,22 @@ func (m model) Init() tea.Cmd {
 	return nil
 }
 
-func (m model) CurrentBuffer() normalmode.Buffer {
+func (m model) CurrentBuffer() buffer {
 	return m.buffers[m.currBuffer]
 }
 
-func (m model) EnterCommandMode() normalmode.EditorModel {
+func (m model) EnterCommandMode() model {
 	m.mode = ModeCommand
 	return m
 }
 
-func (m model) EnterInsertMode() normalmode.EditorModel {
+func (m model) EnterInsertMode() model {
 	m.mode = ModeInsert
 	return m
 }
 
-func (m model) ReplaceCurrentBuffer(b normalmode.Buffer) normalmode.EditorModel {
-	m.buffers[m.currBuffer] = b.(buffer)
+func (m model) ReplaceCurrentBuffer(b buffer) model {
+	m.buffers[m.currBuffer] = b
 	return m
 }
 
