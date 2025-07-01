@@ -19,6 +19,7 @@ type Buffer interface {
 	IncreaseCursorXOffset(int) Buffer
 	CursorYOffset() int
 	IncreaseCursorYOffset(int) Buffer
+	SetCursorYOffset(int) Buffer
 
 	NoOfLines() int
 	Line(n int) string
@@ -52,8 +53,9 @@ type NormalMode interface {
 type command func(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd)
 
 type normalmode struct {
-	commands map[string]command
-	buffer   string
+	commands    map[string]command
+	buffer      string
+	lastCommand string
 }
 
 func New() normalmode {
@@ -83,6 +85,10 @@ func New() normalmode {
 		"i":   nm.commandEnterInsertMode,
 		"o":   nm.commandOpenLineBelow,
 		"O":   nm.commandOpenLineAbove,
+
+		"zt": nm.commandTopViewport,
+		"zz": nm.commandCenterViewport,
+		"zb": nm.commandBottomViewport,
 	}
 
 	return nm
@@ -93,6 +99,7 @@ func (nm normalmode) Handle(msg tea.KeyMsg, m EditorModel) (NormalMode, tea.Mode
 	nCommand, ok := nm.commands[buff]
 	if ok {
 		m, cmd := nCommand(m, nil)
+		nm.lastCommand = buff
 		nm.buffer = ""
 		return nm, m, cmd
 	}
@@ -118,14 +125,11 @@ func (nm normalmode) Handle(msg tea.KeyMsg, m EditorModel) (NormalMode, tea.Mode
 func (nm normalmode) commandOpenLineBelow(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	buff := m.CurrentBuffer()
 
-	// Insert a new empty line below the current line
 	buff = buff.InsertLine(buff.CursorY()+1, "")
 
-	// Move cursor to the new line
 	buff = buff.IncreaseCursorY(1)
 	buff = buff.SetCursorX(0)
 
-	// Replace the buffer and enter insert mode
 	m = m.ReplaceCurrentBuffer(buff)
 	m = m.EnterInsertMode()
 
@@ -135,13 +139,9 @@ func (nm normalmode) commandOpenLineBelow(m EditorModel, cmd tea.Cmd) (tea.Model
 func (nm normalmode) commandOpenLineAbove(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	buff := m.CurrentBuffer()
 
-	// Insert a new empty line above the current line
 	buff = buff.InsertLine(buff.CursorY(), "")
-
-	// Move cursor to the new line (cursor Y stays the same since we inserted above)
 	buff = buff.SetCursorX(0)
 
-	// Replace the buffer and enter insert mode
 	m = m.ReplaceCurrentBuffer(buff)
 	m = m.EnterInsertMode()
 

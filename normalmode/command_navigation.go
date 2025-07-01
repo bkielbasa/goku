@@ -91,11 +91,39 @@ func (nm *normalmode) commandGoToLast(m EditorModel, cmd tea.Cmd) (tea.Model, te
 func (nm *normalmode) commandDeleteLine(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	b := m.CurrentBuffer()
 	b = b.DeleteLine(b.CursorY())
+	m = m.ReplaceCurrentBuffer(b)
 
 	return m, cmd
 }
 
-func (nm *normalmode) commandGoToFirstNonWhiteCharacter(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+func (nm normalmode) commandCenterViewport(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.CurrentBuffer()
+	n := b.CursorY() - (b.Viewport().Height / 2)
+	b = b.SetCursorYOffset(n)
+	m = m.ReplaceCurrentBuffer(b)
+
+	return m, cmd
+}
+
+func (nm normalmode) commandTopViewport(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.CurrentBuffer()
+	n := b.CursorY()
+	b = b.SetCursorYOffset(n)
+	m = m.ReplaceCurrentBuffer(b)
+
+	return m, cmd
+}
+
+func (nm normalmode) commandBottomViewport(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.CurrentBuffer()
+	n := b.CursorY() - b.Viewport().Height + 3
+	b = b.SetCursorYOffset(n)
+	m = m.ReplaceCurrentBuffer(b)
+
+	return m, cmd
+}
+
+func (nm normalmode) commandGoToFirstNonWhiteCharacter(m EditorModel, cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	b := m.CurrentBuffer()
 	l := b.Line(b.CursorY())
 	index := 0

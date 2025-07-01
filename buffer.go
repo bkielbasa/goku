@@ -246,6 +246,20 @@ func (b buffer) IncreaseCursorYOffset(n int) normalmode.Buffer {
 	return b
 }
 
+func (b buffer) SetCursorYOffset(n int) normalmode.Buffer {
+	if n > len(b.Lines())-1 {
+		n = len(b.Lines()) - 1
+	}
+
+	if n < 1 {
+		n = 0
+	}
+
+	b.cursorYOffset = n
+
+	return b
+}
+
 func (b buffer) IncreaseCursorXOffset(n int) normalmode.Buffer {
 	b.cursorXOffset += n
 	if b.cursorXOffset < 0 {
