@@ -7,6 +7,18 @@ import (
 )
 
 func main() {
+	// Check for CLI commands first
+	if len(os.Args) > 1 {
+		// Check if the first argument is a CLI command
+		cliCommands := []string{"langs", "languages"}
+		for _, cmd := range cliCommands {
+			if os.Args[1] == cmd {
+				handleCLICommand(os.Args[1:])
+				return
+			}
+		}
+	}
+	
 	var opts []modelOption
 	
 	// Check if filenames were provided as command line arguments

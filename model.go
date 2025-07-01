@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -24,6 +25,18 @@ type message struct {
 	msgType messageType
 }
 
+type toolInfo struct {
+	Name       string
+	IsInstalled bool
+}
+
+type languageSupport struct {
+	Name        string
+	LSPServer   toolInfo
+	Formatter   toolInfo
+	Highlighting toolInfo
+}
+
 type model struct {
 	mode           editorMode
 	normalmode     *normalmode
@@ -36,6 +49,9 @@ type model struct {
 	currBuffer int
 
 	style editorStyle
+
+	// Language support info, keyed by language name or extension
+	Languages map[string]languageSupport
 }
 
 type modelOption func(*model)
@@ -105,7 +121,44 @@ func initialModel(opts ...modelOption) model {
 		buffers: []buffer{
 			newBuffer(s),
 		},
+
+		Languages: make(map[string]languageSupport),
 	}
+
+	// Add default language support
+	m.Languages["go"] = languageSupport{
+		Name: "Go",
+		LSPServer: toolInfo{Name: "gopls", IsInstalled: false},
+		Formatter: toolInfo{Name: "gofmt", IsInstalled: false},
+		Highlighting: toolInfo{Name: "builtin-go", IsInstalled: true},
+	}
+	m.Languages["py"] = languageSupport{
+		Name: "Python",
+		LSPServer: toolInfo{Name: "pyright", IsInstalled: false},
+		Formatter: toolInfo{Name: "black", IsInstalled: false},
+		Highlighting: toolInfo{Name: "builtin-python", IsInstalled: true},
+	}
+	m.Languages["js"] = languageSupport{
+		Name: "JavaScript",
+		LSPServer: toolInfo{Name: "typescript-language-server", IsInstalled: false},
+		Formatter: toolInfo{Name: "prettier", IsInstalled: false},
+		Highlighting: toolInfo{Name: "builtin-javascript", IsInstalled: true},
+	}
+	m.Languages["rs"] = languageSupport{
+		Name: "Rust",
+		LSPServer: toolInfo{Name: "rust-analyzer", IsInstalled: false},
+		Formatter: toolInfo{Name: "rustfmt", IsInstalled: false},
+		Highlighting: toolInfo{Name: "builtin-rust", IsInstalled: true},
+	}
+	m.Languages["c"] = languageSupport{
+		Name: "C",
+		LSPServer: toolInfo{Name: "clangd", IsInstalled: false},
+		Formatter: toolInfo{Name: "clang-format", IsInstalled: false},
+		Highlighting: toolInfo{Name: "builtin-c", IsInstalled: true},
+	}
+
+	// Check which tools are actually installed
+	m.updateLanguageSupport()
 
 	// Apply all options
 	for _, opt := range opts {
@@ -296,4 +349,30 @@ func fileNameLabel(filename string, s bufferState) string {
 
 func filePossitionInfo(line, cur int) string {
 	return fmt.Sprintf("%d:%d", line, cur)
+}
+
+// isToolInstalled checks if a tool is available in the system PATH
+func isToolInstalled(toolName string) bool {
+	// For now, we'll do a simple check using exec.LookPath
+	// In a real implementation, you might want more sophisticated detection
+	_, err := exec.LookPath(toolName)
+	return err == nil
+}
+
+// updateLanguageSupport checks and updates the installation status of tools
+func (m *model) updateLanguageSupport() {
+	for lang, support := range m.Languages {
+		// Check LSP server
+		if support.LSPServer.Name != "" {
+			support.LSPServer.IsInstalled = isToolInstalled(support.LSPServer.Name)
+		}
+		
+		// Check formatter
+		if support.Formatter.Name != "" {
+			support.Formatter.IsInstalled = isToolInstalled(support.Formatter.Name)
+		}
+		
+		// Update the map
+		m.Languages[lang] = support
+	}
 }
