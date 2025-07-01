@@ -5,10 +5,6 @@ import (
 	"strings"
 )
 
-type NormalMode interface {
-	Handle(msg tea.KeyMsg, m model) (NormalMode, tea.Model, tea.Cmd)
-}
-
 type normalCommand func(m model, cmd tea.Cmd) (tea.Model, tea.Cmd)
 
 type normalmode struct {
@@ -53,7 +49,7 @@ func NewNormalMode() normalmode {
 	return nm
 }
 
-func (nm normalmode) Handle(msg tea.KeyMsg, m model) (NormalMode, tea.Model, tea.Cmd) {
+func (nm normalmode) Handle(msg tea.KeyMsg, m model) (normalmode, tea.Model, tea.Cmd) {
 	buff := nm.buffer + msg.String()
 	nCommand, ok := nm.commands[buff]
 	if ok {
