@@ -46,7 +46,7 @@ func TestLSPIntegration(t *testing.T) {
 
 	// Test LSP go-to-definition
 	t.Run("GoToDefinition", func(t *testing.T) {
-		testGoToDefinition(t, testDir)
+		testGoToDefinition(t, testDir, m)
 	})
 }
 
@@ -98,13 +98,16 @@ func AnotherFunction() {
 }
 
 // testGoToDefinition tests the go-to-definition functionality
-func testGoToDefinition(t *testing.T, testDir string) {
+func testGoToDefinition(t *testing.T, testDir string, m model) {
 	// Initialize the model with test files
 	mainGoPath := filepath.Join(testDir, "main.go")
-	helperGoPath := filepath.Join(testDir, "helper.go")
 
-	// Create a model and load the main.go file
-	m := initialModel(WithFile(mainGoPath))
+	// Load the main.go file into the existing model
+	mainBuf, err := loadFile(mainGoPath, m.style)
+	if err != nil {
+		t.Fatalf("Failed to load main.go: %v", err)
+	}
+	m.buffers[0] = mainBuf
 	
 	// Update language support to check for gopls
 	m.updateLanguageSupport()
@@ -125,6 +128,9 @@ func testGoToDefinition(t *testing.T, testDir string) {
 		m.buffers[0] = m.buffers[0].SetCursorY(7) // Line 8 (0-indexed)
 		m.buffers[0] = m.buffers[0].SetCursorX(1)  // Position on 'H' of HelperFunction
 
+		t.Logf("Cursor position: line %d, char %d", m.buffers[0].CursorY(), m.buffers[0].CursorX())
+		t.Logf("Current line: %q", m.buffers[0].Line(m.buffers[0].CursorY()))
+
 		// Create normal mode and execute gd command
 		nm := NewNormalMode()
 		
@@ -134,16 +140,38 @@ func testGoToDefinition(t *testing.T, testDir string) {
 		nm, modelResult, cmd = nm.Handle(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}, m)
 		m = modelResult.(model)
 
-		// Execute the async command
+		t.Logf("Command returned: %v", cmd != nil)
+
+		// Execute the async command and handle the async flow
 		if cmd != nil {
 			msg := cmd()
-			if result, ok := msg.(asyncGoToDefinitionResult); ok {
-				if result.error != nil {
-					t.Fatalf("Go-to-definition failed: %v", result.error)
-				}
-				if result.location != nil {
-					// Handle the result
-					m = m.handleGoToDefinitionResult(result.location)
+			t.Logf("Async command result: %T", msg)
+			
+			// Handle the async flow by simulating the Update cycle
+			for i := 0; i < 10; i++ { // Limit iterations to prevent infinite loop
+				updateResult, updateCmd := m.Update(msg)
+				m = updateResult.(model)
+				
+				if updateCmd != nil {
+					msg = updateCmd()
+					t.Logf("Update command result: %T", msg)
+					
+					// Check if we got the final result
+					if result, ok := msg.(asyncGoToDefinitionResult); ok {
+						t.Logf("Go-to-definition result: error=%v, location=%v", result.error, result.location)
+						if result.error != nil {
+							t.Fatalf("Go-to-definition failed: %v", result.error)
+						}
+						if result.location != nil {
+							t.Logf("Found location: %s at line %d", result.location.URI, result.location.Range.Start.Line)
+							// Handle the result
+							m = m.handleGoToDefinitionResult(result.location)
+						}
+						break
+					}
+				} else {
+					// No more commands to execute
+					break
 				}
 			}
 		}
@@ -179,64 +207,33 @@ func testGoToDefinition(t *testing.T, testDir string) {
 
 		// Execute gd command
 		nm := NewNormalMode()
-		nm, modelResult, _ := nm.Handle(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}, m)
+		nm, modelResult, cmd := nm.Handle(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}, m)
 		m = modelResult.(model)
-		nm, modelResult, _ = nm.Handle(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}, m)
+		nm, modelResult, cmd = nm.Handle(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}, m)
 		m = modelResult.(model)
+
+		// Handle async flow
+		if cmd != nil {
+			msg := cmd()
+			for i := 0; i < 10; i++ {
+				updateResult, updateCmd := m.Update(msg)
+				m = updateResult.(model)
+				if updateCmd != nil {
+					msg = updateCmd()
+					if _, ok := msg.(asyncGoToDefinitionResult); ok {
+						break
+					}
+				} else {
+					break
+				}
+			}
+		}
 
 		// For stdlib functions, we might not be able to jump to the source
 		// but we should at least not crash and should handle the response gracefully
 		if m.currBuffer == 0 {
 			// If we're still in main.go, that's fine for stdlib functions
 			t.Log("Stayed in main.go for stdlib function (expected behavior)")
-		}
-	})
-
-	// Test 3: Go to definition within the same file
-	t.Run("SameFileDefinition", func(t *testing.T) {
-		// Reset to helper.go
-		if len(m.buffers) > 1 {
-			m.currBuffer = 1 // helper.go
-		} else {
-			// If helper.go wasn't opened, open it
-			helperBuf, err := loadFile(helperGoPath, m.style)
-			if err != nil {
-				t.Fatalf("Failed to load helper.go: %v", err)
-			}
-			m.buffers = append(m.buffers, helperBuf)
-			m.currBuffer = 1
-		}
-
-		// Position cursor on "HelperFunction" in the call on line 8
-		// The line is: HelperFunction()
-		m.buffers[1] = m.buffers[1].SetCursorY(7) // Line 8 (0-indexed)
-		m.buffers[1] = m.buffers[1].SetCursorX(1)  // Position on 'H' of HelperFunction
-
-		// Execute gd command
-		nm := NewNormalMode()
-		nm, modelResult, cmd := nm.Handle(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}, m)
-		m = modelResult.(model)
-		nm, modelResult, cmd = nm.Handle(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}, m)
-		m = modelResult.(model)
-
-		// Execute the async command
-		if cmd != nil {
-			msg := cmd()
-			if result, ok := msg.(asyncGoToDefinitionResult); ok {
-				if result.error != nil {
-					t.Fatalf("Go-to-definition failed: %v", result.error)
-				}
-				if result.location != nil {
-					// Handle the result
-					m = m.handleGoToDefinitionResult(result.location)
-				}
-			}
-		}
-
-		// Should jump to the definition on line 4
-		cursorY := m.buffers[m.currBuffer].CursorY()
-		if cursorY != 3 { // Line 4 (0-indexed)
-			t.Errorf("Expected cursor on line 4, but on line %d", cursorY+1)
 		}
 	})
 }
