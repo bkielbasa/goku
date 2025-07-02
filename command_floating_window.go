@@ -133,22 +133,28 @@ func (c commandBufferList) Update(m model, msg tea.Msg, args []string) (model, t
 		item := FloatingWindowItem{
 			ID:       fmt.Sprintf("buffer_%d", i),
 			Title:    title,
-			Subtitle: "", // Remove the "Buffer 1", "Buffer 2" labels
-			Data:     i, // Buffer index
+			Subtitle: "",
+			Data:     buf.filename, // Use filename instead of index
 		}
 		items = append(items, item)
 	}
 
 	// Create floating window with callbacks
 	fw := NewFloatingWindow("Buffer List", items, m.viewport, 10).Open()
+	fw.buffers = m.buffers // Pass buffers for preview context
 	
 	// Set up callbacks for buffer selection
 	fw.SetCallbacks(
-		// onSelect callback - switch to selected buffer
+		// onSelect callback - switch to selected buffer by filename
 		func(item FloatingWindowItem) tea.Cmd {
-			if bufferIndex, ok := item.Data.(int); ok {
-				return func() tea.Msg {
-					return switchBufferMsg{bufferIndex: bufferIndex}
+			filePath, ok := item.Data.(string)
+			if ok {
+				for idx, buf := range m.buffers {
+					if buf.filename == filePath {
+						return func() tea.Msg {
+							return switchBufferMsg{bufferIndex: idx}
+						}
+					}
 				}
 			}
 			return nil

@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -41,6 +43,7 @@ type FloatingWindow struct {
 	style          floatingWindowStyle
 	onSelect       func(FloatingWindowItem) tea.Cmd
 	onCancel       func() tea.Cmd
+	buffers        []buffer // Add this field for buffer access
 }
 
 // floatingWindowStyle defines the styling for the floating window
@@ -52,6 +55,7 @@ type floatingWindowStyle struct {
 	selected   lipgloss.Style
 	filter     lipgloss.Style
 	subtitle   lipgloss.Style
+	previewHighlight lipgloss.Style
 }
 
 // newFloatingWindowStyle creates a new floating window style
@@ -81,6 +85,10 @@ func newFloatingWindowStyle() floatingWindowStyle {
 		subtitle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#888888")).
 			Italic(true).
+			Padding(0, 1),
+		previewHighlight: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#ffffff")).
+			Background(lipgloss.Color("#3c3c3c")).
 			Padding(0, 1),
 	}
 }
@@ -297,25 +305,30 @@ func (fw *FloatingWindow) View() string {
 		return ""
 	}
 
+	// Layout parameters
+	listWidth := fw.width / 2
+	previewWidth := fw.width - listWidth - 2 // -2 for border padding
+	contentHeight := fw.height - 2 // -2 for status and filter
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+
 	var lines []string
 
-	// Add title (only once)
-	titleLine := fw.style.title.Render(fw.title)
-	lines = append(lines, titleLine)
-
-	// Add filter line if in filter mode
-	if fw.mode == FloatingWindowFilter {
-		filterLine := fw.style.filter.Render(fw.filterText)
-		lines = append(lines, filterLine)
+	// Always show filter input at the top
+	filterLine := fw.style.filter.Render(fw.filterText)
+	if len([]rune(filterLine)) < fw.width-2 {
+		filterLine += strings.Repeat(" ", fw.width-2-len([]rune(filterLine)))
 	}
+	lines = append(lines, filterLine)
 
 	// Calculate available height for items
-	availableHeight := fw.height - 2 // Account for title and status line
-	if fw.mode == FloatingWindowFilter {
-		availableHeight-- // Account for filter line
+	availableHeight := contentHeight - 1 // -1 for status line
+	if availableHeight < 1 {
+		availableHeight = 1
 	}
 
-	// Add items
+	// List rendering (left)
 	startIndex := 0
 	endIndex := len(fw.filteredItems)
 	if len(fw.filteredItems) > availableHeight {
@@ -326,6 +339,7 @@ func (fw *FloatingWindow) View() string {
 			endIndex = availableHeight
 		}
 	}
+	var listLines []string
 	for i := startIndex; i < endIndex && i < len(fw.filteredItems); i++ {
 		item := fw.filteredItems[i]
 		var itemStyle lipgloss.Style
@@ -335,19 +349,105 @@ func (fw *FloatingWindow) View() string {
 			itemStyle = fw.style.item
 		}
 		title := item.Title
-		if len(title) > fw.width-4 {
-			title = title[:fw.width-7] + "..."
+		if len(title) > listWidth-2 {
+			title = title[:listWidth-5] + "..."
 		}
-		itemLine := itemStyle.Render(title)
-		lines = append(lines, itemLine)
-		if item.Subtitle != "" {
-			subtitle := item.Subtitle
-			if len(subtitle) > fw.width-6 {
-				subtitle = subtitle[:fw.width-9] + "..."
+		itemLine := itemStyle.Width(listWidth-2).Render(title)
+		listLines = append(listLines, itemLine)
+	}
+	for len(listLines) < availableHeight {
+		listLines = append(listLines, strings.Repeat(" ", listWidth-2))
+	}
+
+	// Preview rendering (right)
+	var previewLines []string
+	previewLines = make([]string, availableHeight)
+	var previewFilePath string
+	var highlightLine int = -1
+	var fileBuffer *buffer = nil
+	if fw.selectedIndex >= 0 && fw.selectedIndex < len(fw.filteredItems) {
+		item := fw.filteredItems[fw.selectedIndex]
+		// Try to extract a file path and context
+		switch v := item.Data.(type) {
+		case string:
+			previewFilePath = v
+			// Try to find a buffer for this file
+			for i := range fw.buffers {
+				if fw.buffers[i].filename == previewFilePath {
+					fileBuffer = &fw.buffers[i]
+					highlightLine = fw.buffers[i].cursorY
+					break
+				}
 			}
-			subtitleLine := fw.style.subtitle.Render("  " + subtitle)
-			lines = append(lines, subtitleLine)
+		case location:
+			if strings.HasPrefix(v.URI, "file://") {
+				previewFilePath = strings.TrimPrefix(v.URI, "file://")
+				previewFilePath = filepath.FromSlash(previewFilePath)
+				highlightLine = v.Range.Start.Line
+			}
 		}
+	}
+	if previewFilePath != "" {
+		const maxPreviewLines = 20
+		var lines []string
+		var style editorStyle
+		if fileBuffer != nil {
+			lines = fileBuffer.lines
+			style = fileBuffer.style
+		} else {
+			content, err := os.ReadFile(previewFilePath)
+			if err == nil {
+				lines = strings.Split(string(content), "\n")
+				// Remove trailing empty line if file ends with newline
+				if len(lines) > 0 && lines[len(lines)-1] == "" {
+					lines = lines[:len(lines)-1]
+				}
+				// Create a temp buffer for highlighting
+				tmpBuf := newBuffer(newEditorStyle(), bufferWithContent(previewFilePath, string(content)))
+				style = tmpBuf.style
+				fileBuffer = &tmpBuf
+			}
+		}
+		// Center preview on highlightLine
+		startLine := 0
+		if highlightLine >= 0 && len(lines) > availableHeight {
+			startLine = highlightLine - availableHeight/2
+			if startLine < 0 {
+				startLine = 0
+			}
+			if startLine+availableHeight > len(lines) {
+				startLine = len(lines) - availableHeight
+			}
+		}
+		for i := 0; i < availableHeight && startLine+i < len(lines); i++ {
+			lineIdx := startLine + i
+			var rendered string
+			if fileBuffer != nil {
+				rendered = fileBuffer.HighlightLine(lineIdx)
+			} else {
+				rendered = lines[lineIdx]
+			}
+			if lineIdx == highlightLine {
+				rendered = style.previewHighlight.Render(expandTabs(rendered))
+			} else {
+				rendered = expandTabs(rendered)
+			}
+			if len(rendered) > previewWidth-2 {
+				rendered = rendered[:previewWidth-5] + "..."
+			}
+			previewLines[i] = lipgloss.NewStyle().Width(previewWidth-2).Render(rendered)
+		}
+	}
+	for i := range previewLines {
+		if previewLines[i] == "" {
+			previewLines[i] = strings.Repeat(" ", previewWidth-2)
+		}
+	}
+
+	// Merge list and preview columns
+	for i := 0; i < availableHeight; i++ {
+		row := listLines[i] + " │ " + previewLines[i]
+		lines = append(lines, row)
 	}
 
 	// Add status line
@@ -356,20 +456,14 @@ func (fw *FloatingWindow) View() string {
 		statusText += fmt.Sprintf(" (filtered: %s)", fw.filterText)
 	}
 	statusLine := fw.style.border.Render(statusText)
+	if len([]rune(statusLine)) < fw.width-2 {
+		statusLine += strings.Repeat(" ", fw.width-2-len([]rune(statusLine)))
+	}
 	lines = append(lines, statusLine)
 
-	// Pad each line to fw.width-2 (account for border)
-	padWidth := fw.width - 2
-	for i, l := range lines {
-		if len([]rune(l)) < padWidth {
-			lines[i] = l + strings.Repeat(" ", padWidth-len([]rune(l)))
-		} else if len([]rune(l)) > padWidth {
-			lines[i] = string([]rune(l)[:padWidth])
-		}
-	}
 	// Pad number of lines to fw.height-2
-	for len(lines) < fw.height-2 {
-		lines = append(lines, strings.Repeat(" ", padWidth))
+	for len(lines) < fw.height {
+		lines = append(lines, strings.Repeat(" ", fw.width-2))
 	}
 	contentStr := strings.Join(lines, "\n")
 	windowContent := fw.style.window.Width(fw.width).Height(fw.height).Render(contentStr)

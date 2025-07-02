@@ -18,6 +18,7 @@ type editorStyle struct {
 	operator    lipgloss.Style
 	punctuation lipgloss.Style
 	text        lipgloss.Style // Plain text
+	previewHighlight lipgloss.Style // For preview highlight in floating window
 }
 
 func newEditorStyle() editorStyle {
@@ -34,6 +35,7 @@ func newEditorStyle() editorStyle {
 		typeName:    lipgloss.NewStyle().Foreground(lipgloss.Color("#8be9fd")),                                     // cyan
 		operator:    lipgloss.NewStyle().Foreground(lipgloss.Color("#d8d8d8")),                                     // grey05
 		punctuation: lipgloss.NewStyle().Foreground(lipgloss.Color("#d8d8d8")),                                     // grey05
-		text:        lipgloss.NewStyle().Foreground(lipgloss.Color("#d0d0d0")),                                     // white
+		text:        lipgloss.NewStyle().Foreground(lipgloss.Color("#d8d8d8")),                                     // grey05
+		previewHighlight: lipgloss.NewStyle().Background(lipgloss.Color("#444488")).Foreground(lipgloss.Color("#ffffff")), // blue bg, white fg
 	}
 }
