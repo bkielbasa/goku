@@ -45,12 +45,19 @@ func (nm *normalmode) setupCommands() {
 	nm.registerCmd("w", nm.commandNextWord)
 	nm.registerCmd("b", nm.commandPrevWord)
 	nm.registerCmd("gd", nm.commandGoToDefinition)
+	nm.registerCmd("gi", nm.commandGoToImplementation)
+	nm.registerCmd("gt", nm.commandGoToTypeDefinition)
+	nm.registerCmd("gr", nm.commandFindReferences)
 	
 	// File navigation
 	nm.registerCmd("gg", nm.commandGoToBeginingOfTheFile)
 	nm.registerCmd("ge", nm.commandGoToEndOfTheFile)
 	nm.registerCmd("gl", nm.commandGoToLast)
 	nm.registerCmd("gs", nm.commandGoToFirstNonWhiteCharacter)
+	
+	// Floating window commands
+	nm.registerCmd("gf", nm.commandFileFinder)
+	nm.registerCmd("gb", nm.commandBufferList)
 	
 	// Editing commands
 	nm.registerRepeatableCmd("dd", nm.commandDeleteLine)
@@ -114,4 +121,25 @@ func (nm *normalmode) commandRepeat(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+func (nm *normalmode) commandFindReferences(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	// Execute the find references command
+	findRefCmd := commandFindReferences{}
+	newModel, newCmd := findRefCmd.Update(m, nil, nil)
+	return newModel, newCmd
+}
+
+func (nm *normalmode) commandFileFinder(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	// Execute the file finder command
+	fileFinderCmd := commandFileFinder{}
+	newModel, newCmd := fileFinderCmd.Update(m, nil, nil)
+	return newModel, newCmd
+}
+
+func (nm *normalmode) commandBufferList(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	// Execute the buffer list command
+	bufferListCmd := commandBufferList{}
+	newModel, newCmd := bufferListCmd.Update(m, nil, nil)
+	return newModel, newCmd
 } 

@@ -17,6 +17,7 @@ type editorMode string
 const ModeNormal editorMode = "normal"
 const ModeInsert editorMode = "insert"
 const ModeCommand editorMode = "command"
+const ModeFloatingWindow editorMode = "floating_window"
 
 type messageType string
 
@@ -59,6 +60,9 @@ type model struct {
 	// LSP async state
 	lspLoading bool
 	lspError   string
+	
+	// Floating window
+	floatingWindow *FloatingWindow
 }
 
 type modelOption func(*model)
@@ -122,6 +126,9 @@ func initialModel(opts ...modelOption) model {
 			&commandBufferPrev{},
 			&commandBufferLast{},
 			&commandBufferFirst{},
+			&commandFindReferences{},
+			&commandFileFinder{},
+			&commandBufferList{},
 		},
 		style: s,
 
@@ -175,17 +182,110 @@ func initialModel(opts ...modelOption) model {
 	return m
 }
 
-// AsyncGoToDefinitionCmd represents an async go-to-definition command
-type asyncGoToDefinitionCmd struct {
-	filePath string
-	line     int
-	character int
-}
-
 // AsyncGoToDefinitionResult represents the result of an async go-to-definition
 type asyncGoToDefinitionResult struct {
 	location *location
 	error    error
+}
+
+// AsyncGoToImplementationResult represents the result of an async go-to-implementation
+type asyncGoToImplementationResult struct {
+	location *location
+	error    error
+}
+
+// asyncGoToImplementationInit represents the initialization step for implementation
+type asyncGoToImplementationInit struct {
+	filePath  string
+	line      int
+	character int
+}
+
+// asyncGoToImplementationOpenFiles represents the file opening step for implementation
+type asyncGoToImplementationOpenFiles struct {
+	filePath  string
+	line      int
+	character int
+	client    *lspClient
+}
+
+// asyncGoToImplementationWait represents the waiting step for implementation
+type asyncGoToImplementationWait struct {
+	filePath  string
+	line      int
+	character int
+	client    *lspClient
+}
+
+// asyncGoToImplementationRequest represents the actual LSP request step for implementation
+type asyncGoToImplementationRequest struct {
+	filePath  string
+	line      int
+	character int
+	client    *lspClient
+}
+
+// AsyncGoToTypeDefinitionResult represents the result of an async go-to-type-definition
+type asyncGoToTypeDefinitionResult struct {
+	location *location
+	error    error
+}
+
+// asyncGoToTypeDefinitionInit represents the initialization step for type definition
+type asyncGoToTypeDefinitionInit struct {
+	filePath  string
+	line      int
+	character int
+}
+
+// asyncGoToTypeDefinitionOpenFiles represents the file opening step for type definition
+type asyncGoToTypeDefinitionOpenFiles struct {
+	filePath  string
+	line      int
+	character int
+	client    *lspClient
+}
+
+// asyncGoToTypeDefinitionWait represents the waiting step for type definition
+type asyncGoToTypeDefinitionWait struct {
+	filePath  string
+	line      int
+	character int
+	client    *lspClient
+}
+
+// asyncGoToTypeDefinitionRequest represents the actual LSP request step for type definition
+type asyncGoToTypeDefinitionRequest struct {
+	filePath  string
+	line      int
+	character int
+	client    *lspClient
+}
+
+// Async messages for find references
+type asyncFindReferencesOpenFiles struct {
+	filePath  string
+	line      int
+	character int
+	client    *lspClient
+}
+
+type asyncFindReferencesWait struct {
+	filePath  string
+	line      int
+	character int
+	client    *lspClient
+}
+
+type asyncFindReferencesRequest struct {
+	filePath  string
+	line      int
+	character int
+	client    *lspClient
+}
+
+type goToLocationMsg struct {
+	location location
 }
 
 func (m model) Init() tea.Cmd {
@@ -244,6 +344,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.viewport = msg
 		m.buffers[m.currBuffer].viewport = msg
+		// Update floating window size/position if open
+		if m.floatingWindow != nil && m.floatingWindow.IsOpen() {
+			margin := 10
+			windowWidth := m.viewport.Width - 2*margin
+			windowHeight := m.viewport.Height - 2*margin
+			if windowWidth < 20 {
+				windowWidth = 20
+			}
+			if windowHeight < 5 {
+				windowHeight = 5
+			}
+			posX := margin
+			posY := margin
+			m.floatingWindow.SetPosition(posX, posY)
+			m.floatingWindow.SetSize(windowWidth, windowHeight)
+		}
 		return m, nil
 	case asyncGoToDefinitionResult:
 		m.lspLoading = false
@@ -256,6 +372,400 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleGoToDefinitionResult(msg.location), nil
 		}
 		return m, nil
+	case asyncGoToDefinitionInit:
+		// Initialize LSP client
+		client, err := m.getPersistentLSPClient(msg.filePath)
+		if err != nil {
+			return m, func() tea.Msg {
+				return asyncGoToDefinitionResult{error: err}
+			}
+		}
+		
+		// Return command to open files
+		return m, func() tea.Msg {
+			return asyncGoToDefinitionOpenFiles{
+				filePath:  msg.filePath,
+				line:      msg.line,
+				character: msg.character,
+				client:    client,
+			}
+		}
+	case asyncGoToDefinitionOpenFiles:
+		// Open files in a goroutine to avoid blocking
+		return m, func() tea.Msg {
+			// Open files in background
+			go func() {
+				workspaceRoot := filepath.Dir(msg.filePath)
+				absWorkspaceRoot, err := filepath.Abs(workspaceRoot)
+				if err != nil {
+					return
+				}
+
+				// Open all Go files in the workspace for better indexing
+				filepath.Walk(absWorkspaceRoot, func(path string, info os.FileInfo, err error) error {
+					if err != nil {
+						return err
+					}
+					if !info.IsDir() && strings.HasSuffix(path, ".go") {
+						content, err := os.ReadFile(path)
+						if err != nil {
+							return nil // Continue with other files
+						}
+						msg.client.OpenDocument(path, string(content))
+					}
+					return nil
+				})
+			}()
+			
+			// Return command to wait for server
+			return asyncGoToDefinitionWait{
+				filePath:  msg.filePath,
+				line:      msg.line,
+				character: msg.character,
+				client:    msg.client,
+			}
+		}
+	case asyncGoToDefinitionWait:
+		// Wait for server to be ready with a shorter timeout
+		return m, func() tea.Msg {
+			if !msg.client.WaitForReady(5 * time.Second) {
+				return asyncGoToDefinitionResult{error: fmt.Errorf("LSP server not ready after 5 seconds")}
+			}
+			
+			// Return command to make the actual request
+			return asyncGoToDefinitionRequest{
+				filePath:  msg.filePath,
+				line:      msg.line,
+				character: msg.character,
+				client:    msg.client,
+			}
+		}
+	case asyncGoToDefinitionRequest:
+		// Make the actual LSP request
+		return m, func() tea.Msg {
+			// Calculate UTF-16 offset for the cursor position
+			b := m.buffers[m.currBuffer]
+			lineStr := b.Line(msg.line)
+			utf16Offset := utf16Index(lineStr, msg.character)
+
+			location, err := msg.client.GoToDefinition(msg.filePath, msg.line, utf16Offset)
+			return asyncGoToDefinitionResult{location: location, error: err}
+		}
+	case asyncGoToImplementationResult:
+		m.lspLoading = false
+		if msg.error != nil {
+			m.lspError = msg.error.Error()
+			return m, nil
+		}
+		if msg.location != nil {
+			// Handle successful go-to-implementation
+			return m.handleGoToDefinitionResult(msg.location), nil
+		}
+		return m, nil
+	case asyncGoToImplementationInit:
+		// Initialize LSP client
+		client, err := m.getPersistentLSPClient(msg.filePath)
+		if err != nil {
+			return m, func() tea.Msg {
+				return asyncGoToImplementationResult{error: err}
+			}
+		}
+		
+		// Return command to open files
+		return m, func() tea.Msg {
+			return asyncGoToImplementationOpenFiles{
+				filePath:  msg.filePath,
+				line:      msg.line,
+				character: msg.character,
+				client:    client,
+			}
+		}
+	case asyncGoToImplementationOpenFiles:
+		// Open files in a goroutine to avoid blocking
+		return m, func() tea.Msg {
+			// Open files in background
+			go func() {
+				workspaceRoot := filepath.Dir(msg.filePath)
+				absWorkspaceRoot, err := filepath.Abs(workspaceRoot)
+				if err != nil {
+					return
+				}
+
+				// Open all Go files in the workspace for better indexing
+				filepath.Walk(absWorkspaceRoot, func(path string, info os.FileInfo, err error) error {
+					if err != nil {
+						return err
+					}
+					if !info.IsDir() && strings.HasSuffix(path, ".go") {
+						content, err := os.ReadFile(path)
+						if err != nil {
+							return nil // Continue with other files
+						}
+						msg.client.OpenDocument(path, string(content))
+					}
+					return nil
+				})
+			}()
+			
+			// Return command to wait for server
+			return asyncGoToImplementationWait{
+				filePath:  msg.filePath,
+				line:      msg.line,
+				character: msg.character,
+				client:    msg.client,
+			}
+		}
+	case asyncGoToImplementationWait:
+		// Wait for server to be ready with a shorter timeout
+		return m, func() tea.Msg {
+			if !msg.client.WaitForReady(5 * time.Second) {
+				return asyncGoToImplementationResult{error: fmt.Errorf("LSP server not ready after 5 seconds")}
+			}
+			
+			// Return command to make the actual request
+			return asyncGoToImplementationRequest{
+				filePath:  msg.filePath,
+				line:      msg.line,
+				character: msg.character,
+				client:    msg.client,
+			}
+		}
+	case asyncGoToImplementationRequest:
+		// Make the actual LSP request
+		return m, func() tea.Msg {
+			// Calculate UTF-16 offset for the cursor position
+			b := m.buffers[m.currBuffer]
+			lineStr := b.Line(msg.line)
+			utf16Offset := utf16Index(lineStr, msg.character)
+
+			location, err := msg.client.GoToImplementation(msg.filePath, msg.line, utf16Offset)
+			return asyncGoToImplementationResult{location: location, error: err}
+		}
+	case asyncGoToTypeDefinitionResult:
+		m.lspLoading = false
+		if msg.error != nil {
+			m.lspError = msg.error.Error()
+			return m, nil
+		}
+		if msg.location != nil {
+			// Handle successful go-to-type-definition
+			return m.handleGoToDefinitionResult(msg.location), nil
+		}
+		return m, nil
+	case asyncGoToTypeDefinitionInit:
+		// Initialize LSP client
+		client, err := m.getPersistentLSPClient(msg.filePath)
+		if err != nil {
+			return m, func() tea.Msg {
+				return asyncGoToTypeDefinitionResult{error: err}
+			}
+		}
+		
+		// Return command to open files
+		return m, func() tea.Msg {
+			return asyncGoToTypeDefinitionOpenFiles{
+				filePath:  msg.filePath,
+				line:      msg.line,
+				character: msg.character,
+				client:    client,
+			}
+		}
+	case asyncGoToTypeDefinitionOpenFiles:
+		// Open files in a goroutine to avoid blocking
+		return m, func() tea.Msg {
+			// Open files in background
+			go func() {
+				workspaceRoot := filepath.Dir(msg.filePath)
+				absWorkspaceRoot, err := filepath.Abs(workspaceRoot)
+				if err != nil {
+					return
+				}
+
+				// Open all Go files in the workspace for better indexing
+				filepath.Walk(absWorkspaceRoot, func(path string, info os.FileInfo, err error) error {
+					if err != nil {
+						return err
+					}
+					if !info.IsDir() && strings.HasSuffix(path, ".go") {
+						content, err := os.ReadFile(path)
+						if err != nil {
+							return nil // Continue with other files
+						}
+						msg.client.OpenDocument(path, string(content))
+					}
+					return nil
+				})
+			}()
+			
+			// Return command to wait for server
+			return asyncGoToTypeDefinitionWait{
+				filePath:  msg.filePath,
+				line:      msg.line,
+				character: msg.character,
+				client:    msg.client,
+			}
+		}
+	case asyncGoToTypeDefinitionWait:
+		// Wait for server to be ready with a shorter timeout
+		return m, func() tea.Msg {
+			if !msg.client.WaitForReady(5 * time.Second) {
+				return asyncGoToTypeDefinitionResult{error: fmt.Errorf("LSP server not ready after 5 seconds")}
+			}
+			
+			// Return command to make the actual request
+			return asyncGoToTypeDefinitionRequest{
+				filePath:  msg.filePath,
+				line:      msg.line,
+				character: msg.character,
+				client:    msg.client,
+			}
+		}
+	case asyncGoToTypeDefinitionRequest:
+		// Handle async go-to-type-definition request
+		return m, func() tea.Msg {
+			return asyncGoToTypeDefinitionResult{
+				location: nil,
+				error:    fmt.Errorf("go-to-type-definition not implemented yet"),
+			}
+		}
+	case openFileMsg:
+		// Handle opening a file from floating window
+		newBuf, err := loadFile(msg.filePath, m.style)
+		if err != nil {
+			return m.SetErrorMessage(fmt.Sprintf("Failed to open file: %v", err)), nil
+		}
+		m.buffers = append(m.buffers, newBuf)
+		m.currBuffer = len(m.buffers) - 1
+		m.buffers[m.currBuffer].viewport = m.viewport
+		m.floatingWindow = nil
+		m.mode = ModeNormal
+		return m, nil
+	case switchBufferMsg:
+		// Handle switching to a buffer from floating window
+		if msg.bufferIndex >= 0 && msg.bufferIndex < len(m.buffers) {
+			m.currBuffer = msg.bufferIndex
+			m.buffers[m.currBuffer].viewport = m.viewport
+		}
+		m.floatingWindow = nil
+		m.mode = ModeNormal
+		return m, nil
+	case asyncFindReferencesInit:
+		// Initialize LSP client for find references
+		client, err := m.getPersistentLSPClient(msg.filePath)
+		if err != nil {
+			return m, func() tea.Msg {
+				return asyncFindReferencesResult{error: err}
+			}
+		}
+		
+		// Return command to open files
+		return m, func() tea.Msg {
+			return asyncFindReferencesOpenFiles{
+				filePath:  msg.filePath,
+				line:      msg.line,
+				character: msg.character,
+				client:    client,
+			}
+		}
+	case asyncFindReferencesOpenFiles:
+		// Open files in LSP client
+		err := msg.client.OpenFile(msg.filePath)
+		if err != nil {
+			return m, func() tea.Msg {
+				return asyncFindReferencesResult{error: err}
+			}
+		}
+		
+		// Return command to wait a bit for LSP to process
+		return m, func() tea.Msg {
+			return asyncFindReferencesWait{
+				filePath:  msg.filePath,
+				line:      msg.line,
+				character: msg.character,
+				client:    msg.client,
+			}
+		}
+	case asyncFindReferencesWait:
+		// Wait a bit for LSP to process, then make the request
+		return m, func() tea.Msg {
+			return asyncFindReferencesRequest{
+				filePath:  msg.filePath,
+				line:      msg.line,
+				character: msg.character,
+				client:    msg.client,
+			}
+		}
+	case asyncFindReferencesRequest:
+		// Make the find references request
+		locations, err := msg.client.FindReferences(msg.filePath, msg.line, msg.character)
+		return m, func() tea.Msg {
+			return asyncFindReferencesResult{
+				locations: locations,
+				error:     err,
+			}
+		}
+	case asyncFindReferencesResult:
+		if msg.error != nil {
+			return m.SetErrorMessage(fmt.Sprintf("Find references failed: %v", msg.error)), nil
+		}
+		
+		// Convert locations to floating window items
+		var items []FloatingWindowItem
+		for i, loc := range msg.locations {
+			filePath := ""
+			if strings.HasPrefix(loc.URI, "file://") {
+				filePath = strings.TrimPrefix(loc.URI, "file://")
+				filePath = filepath.FromSlash(filePath)
+			}
+			fileNameLineCol := referenceItemTitleWithCol(filePath, loc.Range.Start.Line+1, loc.Range.Start.Character+1)
+			item := FloatingWindowItem{
+				ID:    fmt.Sprintf("ref_%d", i),
+				Title: fileNameLineCol,
+				Data:  loc,
+			}
+			items = append(items, item)
+		}
+		
+		if len(items) == 0 {
+			return m.SetInfoMessage("No references found"), nil
+		}
+		
+		// Create floating window with callbacks
+		fw := NewFloatingWindow("Find References", items, m.viewport, 10).Open()
+		
+		// Set up callbacks for location selection
+		fw.SetCallbacks(
+			// onSelect callback - go to selected location
+			func(item FloatingWindowItem) tea.Cmd {
+				if location, ok := item.Data.(location); ok {
+					return func() tea.Msg {
+						return goToLocationMsg{location: location}
+					}
+				}
+				return nil
+			},
+			// onCancel callback - close window
+			func() tea.Cmd {
+				return func() tea.Msg {
+					return closeFloatingWindowMsg{}
+				}
+			},
+		)
+		
+		m.floatingWindow = fw
+		m.mode = ModeFloatingWindow
+		
+		return m, nil
+	case goToLocationMsg:
+		// Handle going to a location from find references
+		m = m.handleGoToDefinitionResult(&msg.location)
+		m.floatingWindow = nil
+		m.mode = ModeNormal
+		return m, nil
+	case closeFloatingWindowMsg:
+		m.floatingWindow = nil
+		m.mode = ModeNormal
+		return m, nil
 	}
 
 	switch m.mode {
@@ -265,14 +775,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateInsert(msg)
 	case ModeCommand:
 		return m.updateCommand(msg)
+	case ModeFloatingWindow:
+		return m.updateFloatingWindow(msg)
 	}
 	return m, nil
 }
 
 func (m model) View() string {
-	// Get the buffer content
 	bufferContent := m.buffers[m.currBuffer].View()
-	
+
 	// Build the status bar content
 	var statusBarContent string
 	if m.mode == ModeCommand {
@@ -282,13 +793,10 @@ func (m model) View() string {
 		f := fileNameLabel(buf.filename, buf.state)
 
 		buff := fmt.Sprintf("%s ", strings.ToUpper(string(m.mode))) + f
-		
-		// Add buffer information if there are multiple buffers
 		if len(m.buffers) > 1 {
 			buff += fmt.Sprintf(" [%d/%d]", m.currBuffer+1, len(m.buffers))
 		}
 
-		// LSP status info
 		lspStatus := ""
 		langExt := ""
 		if buf.filename != "" {
@@ -313,25 +821,19 @@ func (m model) View() string {
 				}
 			}
 		}
-
-		// Add LSP error if any
 		if m.lspError != "" {
 			lspStatus += fmt.Sprintf("ERR: %s ", m.lspError)
 		}
 
 		posInfo := filePossitionInfo(buf.cursorY+1, buf.cursorX+1)
 		width := m.CurrentBuffer().Viewport().Width
-
-		// Compose status bar: left | lspStatus | right
 		pad := width - len(buff) - len(lspStatus) - len(posInfo)
 		if pad < 1 {
 			pad = 1
 		}
-
 		statusBarContent = m.style.statusBar.Render(buff + strings.Repeat(" ", pad) + lspStatus + posInfo)
 	}
 
-	// Build the message content if present
 	var messageContent string
 	if m.currentMessage != nil {
 		var messageStyle lipgloss.Style
@@ -341,54 +843,61 @@ func (m model) View() string {
 		case MessageError:
 			messageStyle = m.style.messageError
 		}
-
-		// Truncate message if it's too long for the viewport
 		messageText := m.currentMessage.text
 		if len(messageText) > m.viewport.Width {
 			messageText = messageText[:m.viewport.Width-3] + "..."
 		}
-
 		messageContent = messageStyle.Render(messageText)
 	}
 
-	// Calculate available height for content (viewport height minus status bar and message)
 	availableHeight := m.viewport.Height
 	if messageContent != "" {
-		availableHeight -= 1 // Message takes one line
+		availableHeight -= 1
 	}
-	availableHeight -= 1 // Status bar takes one line
-
-	// Ensure availableHeight is at least 1 to prevent slice bounds errors
+	availableHeight -= 1
 	if availableHeight < 1 {
 		availableHeight = 1
 	}
 
-	// Split buffer content into lines and ensure it fits within available height
 	bufferLines := strings.Split(bufferContent, "\n")
 	if len(bufferLines) > availableHeight {
 		bufferLines = bufferLines[:availableHeight]
 	}
-
-	// Pad the content to fill the available height
 	for len(bufferLines) < availableHeight {
 		bufferLines = append(bufferLines, "")
 	}
 
-	// Join the content lines
+	// Overlay floating window if open
+	if m.floatingWindow != nil && m.floatingWindow.IsOpen() {
+		fwLines := strings.Split(m.floatingWindow.View(), "\n")
+		fwHeight := len(fwLines)
+		fwWidth := 0
+		for _, l := range fwLines {
+			if len(l) > fwWidth {
+				fwWidth = len(l)
+			}
+		}
+		// Center the window
+		startY := (availableHeight-fwHeight)/2
+		if startY < 0 {
+			startY = 0
+		}
+		for i := 0; i < fwHeight && (startY+i) < len(bufferLines); i++ {
+			// Overlay the line (replace the whole line)
+			bufferLines[startY+i] = fwLines[i]
+		}
+	}
+
 	content := strings.Join(bufferLines, "\n")
 
-	// Build the final layout
 	var result strings.Builder
 	result.WriteString(content)
-	
 	if messageContent != "" {
 		result.WriteRune('\n')
 		result.WriteString(messageContent)
 	}
-	
 	result.WriteRune('\n')
 	result.WriteString(statusBarContent)
-
 	return result.String()
 }
 
@@ -463,65 +972,44 @@ func (m *model) getPersistentLSPClient(filePath string) (*lspClient, error) {
 // AsyncGoToDefinition creates an async command for go-to-definition
 func (m *model) AsyncGoToDefinition(filePath string, line, character int) tea.Cmd {
 	return func() tea.Msg {
-		client, err := m.getPersistentLSPClient(filePath)
-		if err != nil {
-			return asyncGoToDefinitionResult{error: err}
+		// Start the async process by returning a command to initialize the LSP client
+		return asyncGoToDefinitionInit{
+			filePath: filePath,
+			line:     line,
+			character: character,
 		}
-
-		// Get the workspace root directory
-		workspaceRoot := filepath.Dir(filePath)
-		absWorkspaceRoot, err := filepath.Abs(workspaceRoot)
-		if err != nil {
-			return asyncGoToDefinitionResult{error: err}
-		}
-
-		// Open all Go files in the workspace for better indexing
-		err = filepath.Walk(absWorkspaceRoot, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if !info.IsDir() && strings.HasSuffix(path, ".go") {
-				content, err := os.ReadFile(path)
-				if err != nil {
-					return nil // Continue with other files
-				}
-				err = client.OpenDocument(path, string(content))
-				if err != nil {
-					// Continue with other files
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			return asyncGoToDefinitionResult{error: err}
-		}
-		
-		// Wait much longer for the server to fully load packages
-		if !client.WaitForReady(30 * time.Second) {
-			return asyncGoToDefinitionResult{error: fmt.Errorf("LSP server not ready after 30 seconds")}
-		}
-
-		// Additional wait to ensure packages are fully indexed
-		time.Sleep(5 * time.Second)
-
-		// Calculate UTF-16 offset for the cursor position
-		b := m.buffers[m.currBuffer]
-		lineStr := b.Line(line)
-		utf16Offset := utf16Index(lineStr, character)
-
-		// Debug: show what character we're on
-		if character < len([]rune(lineStr)) {
-			charAtCursor := []rune(lineStr)[character]
-			_ = charAtCursor // Suppress unused variable warning
-		}
-		
-		// Debug: show the identifier at cursor position
-		identifier := extractIdentifierAt(lineStr, character)
-		_ = identifier // Suppress unused variable warning
-
-		location, err := client.GoToDefinition(filePath, line, utf16Offset)
-		return asyncGoToDefinitionResult{location: location, error: err}
 	}
+}
+
+// asyncGoToDefinitionInit represents the initialization step
+type asyncGoToDefinitionInit struct {
+	filePath  string
+	line      int
+	character int
+}
+
+// asyncGoToDefinitionOpenFiles represents the file opening step
+type asyncGoToDefinitionOpenFiles struct {
+	filePath  string
+	line      int
+	character int
+	client    *lspClient
+}
+
+// asyncGoToDefinitionWait represents the waiting step
+type asyncGoToDefinitionWait struct {
+	filePath  string
+	line      int
+	character int
+	client    *lspClient
+}
+
+// asyncGoToDefinitionRequest represents the actual LSP request step
+type asyncGoToDefinitionRequest struct {
+	filePath  string
+	line      int
+	character int
+	client    *lspClient
 }
 
 // handleGoToDefinitionResult processes the result of a go-to-definition request
@@ -575,4 +1063,72 @@ func (m model) handleGoToDefinitionResult(location *location) model {
 	m.buffers[bufferIndex] = b
 
 	return m
+}
+
+// AsyncGoToImplementation creates an async command for go-to-implementation
+func (m *model) AsyncGoToImplementation(filePath string, line, character int) tea.Cmd {
+	return func() tea.Msg {
+		// Start the async process by returning a command to initialize the LSP client
+		return asyncGoToImplementationInit{
+			filePath: filePath,
+			line:     line,
+			character: character,
+		}
+	}
+}
+
+// AsyncGoToTypeDefinition creates an async command for go-to-type-definition
+func (m *model) AsyncGoToTypeDefinition(filePath string, line, character int) tea.Cmd {
+	return func() tea.Msg {
+		return asyncGoToTypeDefinitionInit{
+			filePath: filePath,
+			line:     line,
+			character: character,
+		}
+	}
+}
+
+// updateFloatingWindow handles input when in floating window mode
+func (m model) updateFloatingWindow(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.floatingWindow == nil {
+		// If no floating window, return to normal mode
+		m.mode = ModeNormal
+		return m, nil
+	}
+
+	// Update the floating window
+	updatedWindow, cmd := m.floatingWindow.Update(msg)
+	m.floatingWindow = updatedWindow
+
+	// If the window was closed, return to normal mode
+	if !m.floatingWindow.IsOpen() {
+		m.mode = ModeNormal
+		m.floatingWindow = nil
+	}
+
+	return m, cmd
+}
+
+// OpenFloatingWindow opens a floating window with the given items
+func (m model) OpenFloatingWindow(title string, items []FloatingWindowItem) model {
+	margin := 10
+	fw := NewFloatingWindow(title, items, m.viewport, margin).Open()
+	m.floatingWindow = fw
+	m.mode = ModeFloatingWindow
+	return m
+}
+
+// CloseFloatingWindow closes the current floating window
+func (m model) CloseFloatingWindow() model {
+	if m.floatingWindow != nil {
+		m.floatingWindow.Close()
+		m.floatingWindow = nil
+	}
+	m.mode = ModeNormal
+	return m
+}
+
+// IsFloatingWindowOpen returns true if a floating window is currently open
+func (m model) IsFloatingWindowOpen() bool {
+	return m.floatingWindow != nil && m.floatingWindow.IsOpen()
 }

@@ -267,6 +267,38 @@ func (nm *normalmode) commandGoToDefinition(m model, cmd tea.Cmd) (tea.Model, te
 	return m, asyncCmd
 }
 
+// commandGoToImplementation uses LSP to jump to the implementation of the symbol under cursor
+func (nm *normalmode) commandGoToImplementation(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.buffers[m.currBuffer]
+	filePath := b.FileName()
+	if filePath == "" {
+		return m, cmd
+	}
+
+	// Set loading state and start async go-to-implementation
+	m.lspLoading = true
+	m.lspError = ""
+	
+	asyncCmd := (&m).AsyncGoToImplementation(filePath, b.cursorY, b.cursorX)
+	return m, asyncCmd
+}
+
+// commandGoToTypeDefinition uses LSP to jump to the type definition of the symbol under cursor
+func (nm *normalmode) commandGoToTypeDefinition(m model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	b := m.buffers[m.currBuffer]
+	filePath := b.FileName()
+	if filePath == "" {
+		return m, cmd
+	}
+
+	// Set loading state and start async go-to-type-definition
+	m.lspLoading = true
+	m.lspError = ""
+	
+	asyncCmd := (&m).AsyncGoToTypeDefinition(filePath, b.cursorY, b.cursorX)
+	return m, asyncCmd
+}
+
 // utf16Index returns the number of UTF-16 code units in s[:cursorX] (where cursorX is a rune index)
 func utf16Index(s string, cursorX int) int {
 	runes := []rune(s)

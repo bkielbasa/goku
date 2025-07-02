@@ -597,4 +597,166 @@ func getLSPClientForFile(filePath string, languages map[string]languageSupport) 
 	// Get the root directory (for now, just use the file's directory)
 	rootPath := filepath.Dir(filePath)
 	return lspClientManager.GetLSPClient(lang.LSPServer.Name, rootPath)
+}
+
+// GoToImplementation sends an implementation request to the language server
+func (c *lspClient) GoToImplementation(filePath string, line, character int) (*location, error) {
+	// Get absolute path for the file
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path: %w", err)
+	}
+	
+	fileURI := "file://" + filepath.ToSlash(absPath)
+	
+	params := textDocumentPositionParams{
+		TextDocument: textDocumentIdentifier{URI: fileURI},
+		Position: position{
+			Line:      line,
+			Character: character,
+		},
+	}
+	
+	// Log go-to-implementation request specifically
+	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
+	c.debugFile.WriteString(fmt.Sprintf("[%s] GoToImplementation: file=%s, line=%d, char=%d\n", timestamp, filePath, line, character))
+	
+	result, err := c.sendRequest("textDocument/implementation", params)
+	if err != nil {
+		c.debugFile.WriteString(fmt.Sprintf("[%s] GoToImplementation ERROR: %v\n", timestamp, err))
+		return nil, err
+	}
+
+	// Log the raw result
+	c.debugFile.WriteString(fmt.Sprintf("[%s] GoToImplementation raw result: %s\n", timestamp, string(result)))
+
+	// Try to parse as a single location
+	var loc location
+	err = json.Unmarshal(result, &loc)
+	if err == nil && loc.URI != "" {
+		c.debugFile.WriteString(fmt.Sprintf("[%s] GoToImplementation found single location: %s\n", timestamp, loc.URI))
+		return &loc, nil
+	}
+
+	// Try to parse as an array of locations
+	var locs []location
+	err = json.Unmarshal(result, &locs)
+	if err == nil && len(locs) > 0 {
+		c.debugFile.WriteString(fmt.Sprintf("[%s] GoToImplementation found %d locations\n", timestamp, len(locs)))
+		return &locs[0], nil
+	}
+
+	c.debugFile.WriteString(fmt.Sprintf("[%s] GoToImplementation no implementation found\n", timestamp))
+	return nil, fmt.Errorf("no implementation found or could not parse LSP response")
+}
+
+// GoToTypeDefinition sends a type definition request to the language server
+func (c *lspClient) GoToTypeDefinition(filePath string, line, character int) (*location, error) {
+	// Get absolute path for the file
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path: %w", err)
+	}
+	
+	fileURI := "file://" + filepath.ToSlash(absPath)
+	
+	params := textDocumentPositionParams{
+		TextDocument: textDocumentIdentifier{URI: fileURI},
+		Position: position{
+			Line:      line,
+			Character: character,
+		},
+	}
+	
+	// Log go-to-type-definition request specifically
+	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
+	c.debugFile.WriteString(fmt.Sprintf("[%s] GoToTypeDefinition: file=%s, line=%d, char=%d\n", timestamp, filePath, line, character))
+	
+	result, err := c.sendRequest("textDocument/typeDefinition", params)
+	if err != nil {
+		c.debugFile.WriteString(fmt.Sprintf("[%s] GoToTypeDefinition ERROR: %v\n", timestamp, err))
+		return nil, err
+	}
+
+	// Log the raw result
+	c.debugFile.WriteString(fmt.Sprintf("[%s] GoToTypeDefinition raw result: %s\n", timestamp, string(result)))
+
+	// Try to parse as a single location
+	var loc location
+	err = json.Unmarshal(result, &loc)
+	if err == nil && loc.URI != "" {
+		c.debugFile.WriteString(fmt.Sprintf("[%s] GoToTypeDefinition found single location: %s\n", timestamp, loc.URI))
+		return &loc, nil
+	}
+
+	// Try to parse as an array of locations
+	var locs []location
+	err = json.Unmarshal(result, &locs)
+	if err == nil && len(locs) > 0 {
+		c.debugFile.WriteString(fmt.Sprintf("[%s] GoToTypeDefinition found %d locations\n", timestamp, len(locs)))
+		return &locs[0], nil
+	}
+
+	c.debugFile.WriteString(fmt.Sprintf("[%s] GoToTypeDefinition no type definition found\n", timestamp))
+	return nil, fmt.Errorf("no type definition found or could not parse LSP response")
+}
+
+// FindReferences sends a references request to the language server
+func (c *lspClient) FindReferences(filePath string, line, character int) ([]location, error) {
+	// Get absolute path for the file
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path: %w", err)
+	}
+	
+	fileURI := "file://" + filepath.ToSlash(absPath)
+	
+	params := textDocumentPositionParams{
+		TextDocument: textDocumentIdentifier{URI: fileURI},
+		Position: position{
+			Line:      line,
+			Character: character,
+		},
+	}
+	
+	// Log find-references request specifically
+	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
+	c.debugFile.WriteString(fmt.Sprintf("[%s] FindReferences: file=%s, line=%d, char=%d\n", timestamp, filePath, line, character))
+	
+	result, err := c.sendRequest("textDocument/references", params)
+	if err != nil {
+		c.debugFile.WriteString(fmt.Sprintf("[%s] FindReferences ERROR: %v\n", timestamp, err))
+		return nil, err
+	}
+
+	// Log the raw result
+	c.debugFile.WriteString(fmt.Sprintf("[%s] FindReferences raw result: %s\n", timestamp, string(result)))
+
+	// Try to parse as an array of locations
+	var locs []location
+	err = json.Unmarshal(result, &locs)
+	if err == nil {
+		c.debugFile.WriteString(fmt.Sprintf("[%s] FindReferences found %d locations\n", timestamp, len(locs)))
+		return locs, nil
+	}
+
+	// Try to parse as a single location
+	var loc location
+	err = json.Unmarshal(result, &loc)
+	if err == nil && loc.URI != "" {
+		c.debugFile.WriteString(fmt.Sprintf("[%s] FindReferences found single location: %s\n", timestamp, loc.URI))
+		return []location{loc}, nil
+	}
+
+	c.debugFile.WriteString(fmt.Sprintf("[%s] FindReferences no references found\n", timestamp))
+	return nil, fmt.Errorf("no references found or could not parse LSP response")
+}
+
+// OpenFile opens a file in the LSP server (alias for OpenDocument for backward compatibility)
+func (c *lspClient) OpenFile(filePath string) error {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+	return c.OpenDocument(filePath, string(content))
 } 
